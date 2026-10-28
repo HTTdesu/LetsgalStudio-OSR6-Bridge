@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "elements": [
+    {
+      "id": "mask",
+      "type": "rect",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      "anchor": "tl",
+      "selectorId": "vui-ce4cf456affc5ef99ffce832974167e3",
+      "name": "遮罩",
+      "style": {
+        "fill": "rgba(3, 8, 13, 0.66)",
+        "radius": 0,
+        "opacity": 100,
+        "backdropBlur": 16
+      },
+      "props": {}
+    },
+    {
+      "id": "dialog",
+      "type": "input-dialog",
+      "rect": {
+        "x": 510,
+        "y": 300,
+        "w": 900,
+        "h": 480
+      },
+      "anchor": "tl",
+      "selectorId": "vui-58fe2831ca8e5dfaa3ead9898f70b495",
+      "name": "设备地址",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(10, 19, 28, 0.94)",
+        "borderColor": "#7fd4c8",
+        "borderWidth": 1,
+        "radius": 18,
+        "opacity": 100
+      },
+      "props": {
+        "confirmText": "保存",
+        "defaultValue": "",
+        "description": "设备在局域网里的地址。",
+        "dismissible": true,
+        "falseText": "否",
+        "label": "地址",
+        "maxLength": 40,
+        "minLength": 0,
+        "placeholder": "192.168.1.1",
+        "required": true,
+        "requiredText": "请填写地址",
+        "showLabel": true,
+        "step": 1,
+        "title": "设备地址",
+        "trueText": "是",
+        "valueType": "string",
+        "variable": "OSR6设备地址"
+      },
+      "events": {}
+    }
+  ],
+  "name": "OSR6 地址"
+}

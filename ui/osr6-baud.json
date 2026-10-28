@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "elements": [
+    {
+      "id": "mask",
+      "type": "rect",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      "anchor": "tl",
+      "selectorId": "vui-ea8f45471fc059688a9370d0df6dd91e",
+      "name": "遮罩",
+      "style": {
+        "fill": "rgba(3, 8, 13, 0.66)",
+        "radius": 0,
+        "opacity": 100,
+        "backdropBlur": 16
+      },
+      "props": {}
+    },
+    {
+      "id": "dialog",
+      "type": "input-dialog",
+      "rect": {
+        "x": 510,
+        "y": 300,
+        "w": 900,
+        "h": 480
+      },
+      "anchor": "tl",
+      "selectorId": "vui-4423b5a0358d56d493e32934992cdf42",
+      "name": "波特率",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(10, 19, 28, 0.94)",
+        "borderColor": "#7fd4c8",
+        "borderWidth": 1,
+        "radius": 18,
+        "opacity": 100
+      },
+      "props": {
+        "confirmText": "保存",
+        "defaultValue": "",
+        "description": "串口通信速率。",
+        "dismissible": true,
+        "falseText": "否",
+        "label": "波特率",
+        "maxLength": 7,
+        "minLength": 0,
+        "placeholder": "115200",
+        "required": true,
+        "requiredText": "请填写波特率",
+        "showLabel": true,
+        "step": 1,
+        "title": "波特率",
+        "trueText": "是",
+        "valueType": "string",
+        "variable": "OSR6波特率"
+      },
+      "events": {}
+    }
+  ],
+  "name": "OSR6 波特率"
+}

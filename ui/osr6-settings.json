@@ -1,0 +1,849 @@
+{
+  "version": 2,
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "elements": [
+    {
+      "id": "bg",
+      "type": "rect",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      "anchor": "tl",
+      "name": "背景",
+      "style": {
+        "fill": "#0b1219",
+        "radius": 0,
+        "opacity": 100
+      },
+      "props": {},
+      "selectorId": "vui-5942c5d57c045cabbcf46cff8607eabf"
+    },
+    {
+      "id": "eyebrow",
+      "type": "text",
+      "rect": {
+        "x": 120,
+        "y": 96,
+        "w": 500,
+        "h": 24
+      },
+      "anchor": "tl",
+      "name": "小标题",
+      "style": {
+        "fontSize": 20,
+        "color": "rgba(127, 212, 200, 0.65)",
+        "letterSpacing": 8,
+        "opacity": 100
+      },
+      "props": {
+        "text": "DEVICE"
+      },
+      "selectorId": "vui-0025c1943fda5adc9f901caf483cbac0"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "rect": {
+        "x": 118,
+        "y": 122,
+        "w": 900,
+        "h": 80
+      },
+      "anchor": "tl",
+      "name": "标题",
+      "style": {
+        "fontSize": 64,
+        "color": "#f4f8f7",
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "OSR6 设备"
+      },
+      "selectorId": "vui-357e0b64b3505f80ab40316f11494fd8"
+    },
+    {
+      "id": "title-accent",
+      "type": "rect",
+      "rect": {
+        "x": 120,
+        "y": 212,
+        "w": 72,
+        "h": 4
+      },
+      "anchor": "tl",
+      "name": "强调线",
+      "style": {
+        "fill": "#5fbbae",
+        "radius": 0,
+        "opacity": 100
+      },
+      "props": {},
+      "selectorId": "vui-c73f9d8601de5a02b7036c5545c22f8c"
+    },
+    {
+      "id": "btn-mode-udp",
+      "type": "button",
+      "rect": {
+        "x": 120,
+        "y": 250,
+        "w": 230,
+        "h": 60
+      },
+      "anchor": "tl",
+      "name": "用UDP",
+      "style": {
+        "fontSize": 24,
+        "color": "#06201c",
+        "fill": "#5fbbae",
+        "borderColor": "rgba(127, 212, 200, 0.9)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "用 UDP"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-transport",
+          "paramsJson": "{\"mode\":\"udp\"}"
+        }
+      },
+      "selectorId": "vui-e3aef0e29a365226beb2d74509280c9b",
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "udp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "btn-mode-serial",
+      "type": "button",
+      "rect": {
+        "x": 370,
+        "y": 250,
+        "w": 230,
+        "h": 60
+      },
+      "anchor": "tl",
+      "name": "用串口",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255, 255, 255, 0.07)",
+        "borderColor": "rgba(255, 255, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "用串口"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-transport",
+          "paramsJson": "{\"mode\":\"serial\"}"
+        }
+      },
+      "selectorId": "vui-0f9548c94b4e566b9c1bf876c19d87a5",
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "udp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "udp-card",
+      "type": "rect",
+      "rect": {
+        "x": 120,
+        "y": 340,
+        "w": 1680,
+        "h": 250
+      },
+      "anchor": "tl",
+      "name": "UDP 卡片",
+      "style": {
+        "fill": "rgba(255, 255, 255, 0.045)",
+        "borderColor": "rgba(127, 212, 200, 0.16)",
+        "borderWidth": 1,
+        "radius": 16,
+        "opacity": 100
+      },
+      "props": {},
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-eb035c98f6ef5009bccc117ff5f88aa7"
+    },
+    {
+      "id": "udp-addr-label",
+      "type": "text",
+      "rect": {
+        "x": 170,
+        "y": 380,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "地址标签",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "设备地址"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-d4e4cb0c4fb3501192b8a83005b32c3c"
+    },
+    {
+      "id": "udp-addr-value",
+      "type": "text",
+      "rect": {
+        "x": 430,
+        "y": 380,
+        "w": 520,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "地址值",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.82)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6设备地址}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-b819e799f4c75a4b81515e3b74cd5390"
+    },
+    {
+      "id": "udp-addr-edit",
+      "type": "button",
+      "rect": {
+        "x": 966,
+        "y": 382,
+        "w": 56,
+        "h": 52
+      },
+      "anchor": "tl",
+      "name": "改地址",
+      "style": {
+        "fontSize": 22,
+        "color": "#7fd4c8",
+        "fill": "rgba(127, 212, 200, 0.10)",
+        "borderColor": "rgba(127, 212, 200, 0.35)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 0,
+        "opacity": 100
+      },
+      "props": {
+        "text": "✎"
+      },
+      "events": {
+        "onClick": {
+          "target": "@com.httdesu.osr6-bridge/osr6-address",
+          "type": "ui.open"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-1449d0d32740557d925e0bfe64d0ee41"
+    },
+    {
+      "id": "udp-port-label",
+      "type": "text",
+      "rect": {
+        "x": 170,
+        "y": 452,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "端口标签",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "设备端口"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-963d2585d49a524aab3b512d9b092e12"
+    },
+    {
+      "id": "udp-port-value",
+      "type": "text",
+      "rect": {
+        "x": 430,
+        "y": 452,
+        "w": 520,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "端口值",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.82)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6设备端口}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-00a7ee3ed96e5e7792406bea91601a59"
+    },
+    {
+      "id": "udp-port-edit",
+      "type": "button",
+      "rect": {
+        "x": 966,
+        "y": 454,
+        "w": 56,
+        "h": 52
+      },
+      "anchor": "tl",
+      "name": "改端口",
+      "style": {
+        "fontSize": 22,
+        "color": "#7fd4c8",
+        "fill": "rgba(127, 212, 200, 0.10)",
+        "borderColor": "rgba(127, 212, 200, 0.35)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 0,
+        "opacity": 100
+      },
+      "props": {
+        "text": "✎"
+      },
+      "events": {
+        "onClick": {
+          "target": "@com.httdesu.osr6-bridge/osr6-port",
+          "type": "ui.open"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-89afe769c2405ae5a11c92816778154a"
+    },
+    {
+      "id": "serial-card",
+      "type": "rect",
+      "rect": {
+        "x": 120,
+        "y": 340,
+        "w": 1680,
+        "h": 250
+      },
+      "anchor": "tl",
+      "name": "串口卡片",
+      "style": {
+        "fill": "rgba(255, 255, 255, 0.045)",
+        "borderColor": "rgba(127, 212, 200, 0.16)",
+        "borderWidth": 1,
+        "radius": 16,
+        "opacity": 100
+      },
+      "props": {},
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-12a78daa30aa5d5abd1cf87a937c4828"
+    },
+    {
+      "id": "serial-index-label",
+      "type": "text",
+      "rect": {
+        "x": 170,
+        "y": 380,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "序号标签",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "串口序号"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-cdbf47ae67245220a05cc72a4d16dae0"
+    },
+    {
+      "id": "serial-index-value",
+      "type": "text",
+      "rect": {
+        "x": 430,
+        "y": 380,
+        "w": 520,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "序号值",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.82)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口序号}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-bc2ee6d516b7564bb8ffd8f61e6888e0"
+    },
+    {
+      "id": "serial-index-edit",
+      "type": "button",
+      "rect": {
+        "x": 966,
+        "y": 382,
+        "w": 56,
+        "h": 52
+      },
+      "anchor": "tl",
+      "name": "改序号",
+      "style": {
+        "fontSize": 22,
+        "color": "#7fd4c8",
+        "fill": "rgba(127, 212, 200, 0.10)",
+        "borderColor": "rgba(127, 212, 200, 0.35)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 0,
+        "opacity": 100
+      },
+      "props": {
+        "text": "✎"
+      },
+      "events": {
+        "onClick": {
+          "target": "@com.httdesu.osr6-bridge/osr6-serial-index",
+          "type": "ui.open"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-e5c9ab6aed4d53ee993ae6bb178de9c4"
+    },
+    {
+      "id": "serial-baud-label",
+      "type": "text",
+      "rect": {
+        "x": 170,
+        "y": 452,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "波特率标签",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "波特率"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-18495efddfc6580abe568336ef3ddbda"
+    },
+    {
+      "id": "serial-baud-value",
+      "type": "text",
+      "rect": {
+        "x": 430,
+        "y": 452,
+        "w": 520,
+        "h": 56
+      },
+      "anchor": "tl",
+      "name": "波特率值",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.82)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6波特率}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-3448600a26f4593cb07e1d1109efcced"
+    },
+    {
+      "id": "serial-baud-edit",
+      "type": "button",
+      "rect": {
+        "x": 966,
+        "y": 454,
+        "w": 56,
+        "h": 52
+      },
+      "anchor": "tl",
+      "name": "改波特率",
+      "style": {
+        "fontSize": 22,
+        "color": "#7fd4c8",
+        "fill": "rgba(127, 212, 200, 0.10)",
+        "borderColor": "rgba(127, 212, 200, 0.35)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 0,
+        "opacity": 100
+      },
+      "props": {
+        "text": "✎"
+      },
+      "events": {
+        "onClick": {
+          "target": "@com.httdesu.osr6-bridge/osr6-baud",
+          "type": "ui.open"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      },
+      "selectorId": "vui-5b40aef7d07356729b197109de80488f"
+    },
+    {
+      "id": "btn-test",
+      "type": "button",
+      "rect": {
+        "x": 120,
+        "y": 640,
+        "w": 230,
+        "h": 64
+      },
+      "anchor": "tl",
+      "name": "测试连接",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255, 255, 255, 0.07)",
+        "borderColor": "rgba(255, 255, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "测试连接"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/test-device"
+        }
+      },
+      "selectorId": "vui-9e27d78188e65477b32f3084c9f75ef8"
+    },
+    {
+      "id": "btn-close",
+      "type": "button",
+      "rect": {
+        "x": 1570,
+        "y": 640,
+        "w": 230,
+        "h": 64
+      },
+      "anchor": "tl",
+      "name": "关闭",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255, 255, 255, 0.07)",
+        "borderColor": "rgba(255, 255, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "关闭"
+      },
+      "events": {
+        "onClick": {
+          "type": "ui.close"
+        }
+      },
+      "selectorId": "vui-cac407282339512187777ab28f01ab97"
+    },
+    {
+      "id": "button-mvqt9rb9-2347",
+      "selectorId": "vui-4b6a3a836ad5449588b56b4a2dd5ef48",
+      "type": "button",
+      "name": "用UDP-未选",
+      "rect": {
+        "x": 120,
+        "y": 250,
+        "w": 230,
+        "h": 60
+      },
+      "anchor": "c",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255, 255, 255, 0.07)",
+        "borderColor": "rgba(255, 255, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "用 UDP"
+      },
+      "events": {
+        "onClick": {
+          "paramsJson": "{\"mode\":\"udp\"}",
+          "target": "com.httdesu.osr6-bridge/set-transport",
+          "type": "ext.call"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "button-mvqt9rb9-2348",
+      "selectorId": "vui-3c4b17be31614832a3396bbfb465e0b3",
+      "type": "button",
+      "name": "用串口-选中",
+      "rect": {
+        "x": 370,
+        "y": 250,
+        "w": 230,
+        "h": 60
+      },
+      "anchor": "c",
+      "style": {
+        "fontSize": 24,
+        "color": "#06201c",
+        "fill": "#5fbbae",
+        "borderColor": "rgba(127, 212, 200, 0.9)",
+        "borderWidth": 1,
+        "radius": 12,
+        "letterSpacing": 4,
+        "opacity": 100
+      },
+      "props": {
+        "text": "用串口"
+      },
+      "events": {
+        "onClick": {
+          "paramsJson": "{\"mode\":\"serial\"}",
+          "target": "com.httdesu.osr6-bridge/set-transport",
+          "type": "ext.call"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    }
+  ],
+  "name": "OSR6 设置"
+}
