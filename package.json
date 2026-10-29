@@ -6,6 +6,8 @@
   "scripts": {
     "build": "vite build && vite build --mode studio",
     "watch": "node scripts/watch.mjs",
+    "test:connections": "node --test tests/connections.test.mjs",
+    "test:bundle": "node --test tests/bundle.test.mjs",
     "pack:build": "esbuild src/carrier.ts --bundle --platform=node --format=esm --outfile=tools/carrier.mjs",
     "pack": "npm run pack:build && node tools/pack-funscript.mjs"
   },
@@ -17,12 +19,17 @@
     "@avg-studio/sdk": "file:./sdk",
     "@avg-studio/studio-ui": "file:./studio-ui",
     "@chakra-ui/react": "^3.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "@types/node": "22.20.5",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
-    "vite": "^5.3.1",
     "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.1.3"
+    "esbuild": "0.21.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.1.3",
+    "vite": "^5.3.1"
+  },
+  "dependencies": {
+    "serialport": "13.0.0"
   }
 }

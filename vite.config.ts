@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { serialportBundlePlugin } from "./scripts/serialport-bundle.mjs";
 
 // This extension has two entries, built in two passes into the same dist/ folder
 // (Studio loads each entry as one file and cannot load shared chunks):
@@ -78,7 +79,7 @@ function studioOnlyGuard(): Plugin {
 export default defineConfig(({ mode }) => {
   const studio = mode === "studio";
   return {
-    plugins: studio ? [react()] : [react(), studioOnlyGuard()],
+    plugins: studio ? [react(), serialportBundlePlugin()] : [react(), studioOnlyGuard(), serialportBundlePlugin()],
     build: {
       lib: {
         entry: path.resolve(__dirname, studio ? "src/studio.tsx" : "src/index.tsx"),

@@ -1,7 +1,7 @@
 {
   "id": "com.httdesu.osr6-bridge",
-  "name": "操作OSR6和飞机杯联动",
-  "description": "通过 TCode 协议驱动 OSR6 等外设（UDP 与串口两种连接），让剧本演出驱动设备运动。",
+  "name": "OSR6 联动",
+  "description": "通过 TCode 协议驱动 OSR6 等外设，支持 WiFi UDP、USB 和传统蓝牙串口，让剧本演出驱动设备运动。",
   "author": "HTTdesu",
   "version": "0.9.1",
   "entry": "dist/index.mjs",
