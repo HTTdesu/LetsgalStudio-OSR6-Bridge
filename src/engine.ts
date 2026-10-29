@@ -17,7 +17,6 @@ import {
 import {
   createSerialTransport,
   createUdpTransport,
-  parseUsbId,
   type SerialKind,
   type SerialBackend,
   type SerialApiLike,
@@ -37,10 +36,7 @@ export interface Osr6Settings {
   serialBackend?: SerialBackend;
   udpHost: string;
   udpPort: number;
-  serialVendorId: string;
-  serialProductId: string;
   /** 已授权串口列表里的序号（0 起），对应编辑器里列出来的那一行。 */
-  serialPortIndex: number;
   baudRate: number;
   updateHz: number;
   smoothing: number;
@@ -129,9 +125,6 @@ export class Osr6Engine {
             api: dependencies.serialApi,
             baudRate: settings.baudRate,
             kind: settings.serialKind,
-            vendorId: settings.serialKind === "bluetooth" ? undefined : parseUsbId(settings.serialVendorId),
-            productId: settings.serialKind === "bluetooth" ? undefined : parseUsbId(settings.serialProductId),
-            portIndex: settings.serialPortIndex,
             selectedPort: dependencies.selectedPort,
             onError,
           });
@@ -250,8 +243,13 @@ export class Osr6Engine {
       this.targets.set(axis, target);
       this.current.set(axis, target);
       this.lastSent.set(axis, Math.round(output * 9999));
-      this.transport.send(encodeLine([encodeAxis(axis, output, rampMs)]));
-      this.sentFrames += 1;
+      try {
+        this.transport.send(encodeLine([encodeAxis(axis, output, rampMs)]));
+        this.sentFrames += 1;
+      } catch (error) {
+        // 与 tick()、stop() 一致：发送失败只记录，不把异常抛回剧本。
+        this.lastError = error instanceof Error ? error.message : String(error);
+      }
       return;
     }
 

@@ -34,6 +34,8 @@ class NativeSerialPort extends EventTarget implements SerialPortLike {
   private input?: ReadableStreamDefaultController<Uint8Array>;
   private output?: WritableStreamDefaultController;
   private buffered: Uint8Array[] = [];
+  /** 缓冲已满时丢弃的读取块数（诊断用，正常应为 0）。 */
+  droppedChunks = 0;
   private receiving = true;
   private opening?: Promise<void>;
   private closing?: Promise<void>;
@@ -67,7 +69,9 @@ class NativeSerialPort extends EventTarget implements SerialPortLike {
       if (this.serial !== serial || !this.receiving) return;
       const copy = new Uint8Array(bytes);
       if (this.input && (this.input.desiredSize ?? 0) > -16) this.input.enqueue(copy);
-      else if (!this.input && this.buffered.length < 16) this.buffered.push(copy);
+      // 还没有 reader、或背压太深时先缓冲（有上限）；只有缓冲满了才丢弃并计数。
+      else if (this.buffered.length < 16) this.buffered.push(copy);
+      else this.droppedChunks += 1;
     });
     serial.on("error", (error: Error) => { if (this.serial === serial) this.disconnected(error); });
     serial.on("close", (error?: Error) => {

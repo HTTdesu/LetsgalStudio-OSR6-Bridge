@@ -20,6 +20,8 @@ export class RuntimeState {
   playbackHeartbeat: ReturnType<typeof setInterval> | null = null;
   readonly testTimers = new Set<ReturnType<typeof setTimeout>>();
   selectedPort?: SerialPortLike;
+  /** 最近一次扫描到的串口，供 UI 文档里的「连接」按钮按序号取用。 */
+  portSlots: SerialPortLike[] = [];
   nativeSerial?: NativeSerialApi;
   started = false;
   connectionKey = "";

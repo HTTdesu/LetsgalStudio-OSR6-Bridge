@@ -37,10 +37,6 @@ export interface SerialOptions {
   api?: SerialApiLike;
   baudRate: number;
   kind?: SerialKind;
-  vendorId?: number;
-  productId?: number;
-  /** 仅用于旧配置兼容，自动连接不把列表序号当设备身份。 */
-  portIndex?: number;
   selectedPort?: SerialPortLike;
   onError?: (error: Error) => void;
 }
@@ -76,14 +72,6 @@ export function serialRequestErrorMessage(error: unknown): string {
   }
   return errorMessage(error);
 }
-export function parseUsbId(raw: string | undefined): number | undefined {
-  const text = (raw ?? "").trim();
-  if (!text) return undefined;
-  if (!/^(?:0x[0-9a-f]+|\d+)$/i.test(text)) throw new Error("USB ID 必须是十进制或 0x 开头的十六进制数字。");
-  const value = Number(text);
-  if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error("USB ID 必须在 0–65535 之间。");
-  return value;
-}
 export function getSerialApi(): SerialApiLike | null {
   if (typeof navigator === "undefined") return null;
   const api = (navigator as unknown as { serial?: SerialApiLike }).serial;
@@ -110,8 +98,7 @@ export function matchesSerialPort(port: SerialPortLike, options: SerialOptions):
     // 老宿主的映射 COM 口可能没有蓝牙标识，仍允许手动选择。
     return bluetooth || (info.usbVendorId === undefined && info.usbProductId === undefined);
   }
-  if (options.vendorId !== undefined && info.usbVendorId !== options.vendorId) return false;
-  if (options.productId !== undefined && info.usbProductId !== options.productId) return false;
+  // 不再按 USB VID/PID 硬筛选：端口由玩家从列表里明确选择，选错换个口即可。
   return true;
 }
 export function describeSerialPort(port: SerialPortLike): string {
@@ -136,11 +123,8 @@ export function requestSerialDevice(options: SerialOptions): Promise<SerialPortL
   if (reason) return Promise.reject(new Error(reason));
   let request: SerialRequestOptions | undefined;
   if (options.kind === "bluetooth") request = { filters: [{ bluetoothServiceClassId: 0x1101 }] };
-  else if (options.vendorId !== undefined) {
-    request = { filters: [{ usbVendorId: options.vendorId, ...(options.productId === undefined ? {} : { usbProductId: options.productId }) }] };
-  }
   return (options.api ?? getSerialApi()!).requestPort(request).then((port) => {
-    if (!matchesSerialPort(port, options)) throw new Error("选择的设备不符合当前串口类型或 USB ID，请重新选择。");
+    if (!matchesSerialPort(port, options)) throw new Error("选择的设备不符合当前串口类型，请重新选择。");
     return port;
   });
 }

@@ -1,7 +1,7 @@
 import { NativeSerialApi } from "./native-serial";
 import { loadSerialPort, type SerialportNodeModules } from "./serialport-loader";
 
-interface StudioNativeHost { require?: (specifier: string) => unknown }
+interface StudioNativeHost { require: (specifier: string) => unknown }
 
 /**
  * 编辑器没有 ExtensionContext。为用户要求的本地设备选择和测试复用宿主 Node。
@@ -11,19 +11,20 @@ export function createStudioSerialApi(host: StudioNativeHost = globalThis as unk
   if (typeof host.require !== "function") {
     throw new Error("当前编辑器没有开放原生串口所需的 Node 能力。请使用预览中的设备面板，或由宿主开放该能力。");
   }
-  const require = host.require.bind(host);
+  // 模块名必须是字面量、直接调用宿主 require——工坊机械审核拒绝别名转发。
   return new NativeSerialApi(() => loadSerialPort({
-    process: require("node:process") as SerialportNodeModules["process"],
-    buffer: require("node:buffer") as SerialportNodeModules["buffer"],
-    fs: require("node:fs") as SerialportNodeModules["fs"],
-    os: require("node:os") as SerialportNodeModules["os"],
-    path: require("node:path") as SerialportNodeModules["path"],
-    crypto: require("node:crypto") as SerialportNodeModules["crypto"],
-    zlib: require("node:zlib") as SerialportNodeModules["zlib"],
-    stream: require("node:stream") as SerialportNodeModules["stream"],
-    events: require("node:events") as SerialportNodeModules["events"],
-    util: require("node:util") as SerialportNodeModules["util"],
-    tty: require("node:tty") as SerialportNodeModules["tty"],
-    child_process: require("node:child_process") as SerialportNodeModules["child_process"],
+    process: host.require("node:process") as SerialportNodeModules["process"],
+    buffer: host.require("node:buffer") as SerialportNodeModules["buffer"],
+    fs: host.require("node:fs") as SerialportNodeModules["fs"],
+    os: host.require("node:os") as SerialportNodeModules["os"],
+    path: host.require("node:path") as SerialportNodeModules["path"],
+    crypto: host.require("node:crypto") as SerialportNodeModules["crypto"],
+    zlib: host.require("node:zlib") as SerialportNodeModules["zlib"],
+    stream: host.require("node:stream") as SerialportNodeModules["stream"],
+    events: host.require("node:events") as SerialportNodeModules["events"],
+    util: host.require("node:util") as SerialportNodeModules["util"],
+    tty: host.require("node:tty") as SerialportNodeModules["tty"],
+    // 只有 Linux 枚举端口时才需要子进程；同样按字面量申请一次。
+    child_process: host.require("node:child_process") as NonNullable<SerialportNodeModules["child_process"]>,
   }));
 }

@@ -43,7 +43,7 @@ for (const file of await readdir(path.join(root, "src"))) {
 }
 const load = (name) => import(pathToFileURL(path.join(temp, name + ".mjs")).href);
 const transportModule = await load("transport");
-const { createSerialTransport, requestSerialDevice, listSerialDevices, parseUsbId } = transportModule;
+const { createSerialTransport, requestSerialDevice, listSerialDevices } = transportModule;
 const { Osr6Engine } = await load("engine");
 const { runtimeForSignal } = await load("runtime-state");
 const { probeSerialDevice, testSerialDevice } = await load("serial-probe");
@@ -53,7 +53,7 @@ const { NativeSerialApi } = await load("native-serial");
 const { loadSerialPort, selectSerialportBinary } = await load("serialport-loader");
 const { createStudioSerialApi } = await load("studio-serial");
 const { settingsPage: StudioSettingsPage } = await load("studio");
-const { default: Extension, SerialDevicePickerExtension } = await load("index");
+const { default: Extension } = await load("index");
 const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const resources = [];
@@ -106,7 +106,7 @@ function serialApi(ports, request = () => ports[0]) {
 }
 function settings(overrides = {}) {
   return { transport: "serial", serialKind: "auto", udpHost: "192.168.1.1", udpPort: 8000,
-    serialVendorId: "", serialProductId: "", serialPortIndex: 0, baudRate: 115200,
+    baudRate: 115200,
     updateHz: 30, smoothing: 0, idleStopMs: 0, axes: [], ...overrides };
 }
 function engine() {
@@ -119,7 +119,8 @@ function context(overrides = {}) {
   const ctx = { flow: { signal: abort.signal }, variables: { get: (key) => values.get(key), set: (key, value) => values.set(key, value) },
     settings: { get: (key) => config[key.replace(/^osr6\./, "")] },
     native: { node: { require() { assert.fail("serial must not load Node"); } } },
-    ui: { calls: [], async show(...args) { this.calls.push(args); }, async hide() {} } };
+    ui: { calls: [], async show(...args) { this.calls.push(args); }, async hide() {} },
+    visualUI: { calls: [], async open(...args) { this.calls.push(args); return { name: args[0], get: () => null }; } } };
   resources.push(async () => { abort.abort(); await runtimeForSignal(abort.signal).engine.disconnect(); });
   return { ctx, abort, values, config };
 }
@@ -145,11 +146,13 @@ test("automatic connection never prompts and refuses ambiguous or changed ports"
   assert.equal(api.requests, 0);
 });
 
-test("explicit selection overrides list order; global indices survive USB filtering", async () => {
+test("explicit selection overrides list order", async () => {
   const unrelated = fakePort({ usbVendorId: 1 }); const wanted = fakePort();
   const ports = [unrelated, wanted]; serialApi(ports);
-  const found = await listSerialDevices({ baudRate: 115200, vendorId: 0x1a86 });
-  assert.equal(found[0].index, 1);
+  // 不再按 VID/PID 过滤：两个端口都列出来，由用户明确选择。
+  const found = await listSerialDevices({ baudRate: 115200 });
+  assert.equal(found.length, 2);
+  assert.equal(found[0].index, 0);
   ports.reverse();
   const channel = await createSerialTransport({ baudRate: 115200, selectedPort: wanted });
   resources.push(() => channel.close());
@@ -164,18 +167,18 @@ test("SPP requests happen synchronously on click and ignore USB filters", async 
   assert.deepEqual(api.requestOptions, { filters: [{ bluetoothServiceClassId: 0x1101 }] });
   await result;
   const value = engine();
-  await value.connect(settings({ serialKind: "bluetooth", serialVendorId: "not-an-id" }));
+  await value.connect(settings({ serialKind: "bluetooth" }));
   assert.match(value.endpoint, /蓝牙串口/);
 });
 
-test("USB request includes VID/PID and rejects a wrong product; cancellation stays cancellation", async () => {
-  const wrong = fakePort({ usbVendorId: 1, usbProductId: 9 });
-  const api = serialApi([wrong]);
-  await assert.rejects(requestSerialDevice({ baudRate: 115200, vendorId: 1, productId: 2 }), /不符合/);
-  assert.deepEqual(api.requestOptions.filters, [{ usbVendorId: 1, usbProductId: 2 }]);
+test("USB request asks for any port and keeps cancellation as cancellation", async () => {
+  const port = fakePort({ usbVendorId: 1, usbProductId: 9 });
+  const api = serialApi([port]);
+  await requestSerialDevice({ baudRate: 115200 });
+  // 不再按 VID/PID 预筛：请求不带 filters，由用户在选择框里挑。
+  assert.equal(api.requestOptions, undefined);
   serialApi([], () => { throw new DOMException("cancelled", "NotFoundError"); });
   await assert.rejects(requestSerialDevice({ baudRate: 115200 }), { name: "NotFoundError" });
-  assert.throws(() => parseUsbId("0x123z"), /USB ID/);
 });
 
 test("write failure updates connection status and releases the physical port", async () => {
@@ -288,21 +291,20 @@ test("runtime entry starts serial without Node; player picker preserves compatib
   await Extension.onRegister(ctx);
   await waitFor(() => runtimeForSignal(abort.signal).engine.connected);
   assert.equal(api.requests, 0);
-  const picker = new SerialDevicePickerExtension(); picker.context = ctx;
-  const { props } = picker.render();
-  await props.connect(port, "usb", 57600);
+  // 面板改成引擎托管 UI：扫描写入槽位变量，再按槽位连接。
+  await Extension.scanSerialPorts.run(ctx, {});
+  assert.ok(String(values.get("OSR6串口1")).length > 0);
+  await Extension.pickSerialPort.run(ctx, { slot: 1 });
   assert.equal(values.get("OSR6连接方式"), "serial");
-  assert.equal(values.get("OSR6串口类型"), "usb");
-  assert.equal(values.get("OSR6波特率"), "57600");
-  assert.match(props.snapshot().endpoint, /57600/);
+  assert.match(String(values.get("OSR6串口状态")), /已连接/);
 });
 
 test("first-time runtime connection opens the modal picker without requesting permissions", async () => {
   const api = serialApi([]); const { ctx } = context({ autoConnect: false });
   await Extension.connect.run(ctx);
   assert.equal(api.requests, 0);
-  assert.equal(ctx.ui.calls[0][0], "osr6-serial-picker");
-  assert.equal(ctx.ui.calls[0][2].modal, true);
+  assert.equal(ctx.visualUI.calls[0][0], "@com.httdesu.osr6-bridge/osr6-settings");
+  assert.equal(ctx.visualUI.calls[0][1].modal, true);
 });
 
 test("unavailable and insecure environments explain what is missing", async () => {
@@ -365,20 +367,16 @@ test("native device disconnection updates status and replaced port identities ca
 test("native backend persists player choice through the runtime SDK built-in loader", async () => {
   const bridge = nativeBridge(); const { ctx, values } = context({ autoConnect: false });
   ctx.native.node.require = bridge.host.require;
-  const picker = new SerialDevicePickerExtension(); picker.context = ctx;
-  const { props } = picker.render();
-  const api = props.getOptions("native").api;
-  const [port] = await api.getPorts();
-  await props.connect(port, "usb", 115200, "native");
-  assert.equal(values.get("OSR6串口访问方式"), "native");
-  assert.match(props.snapshot().endpoint, /COM3/);
+  await Extension.scanSerialPorts.run(ctx, {});
+  await Extension.pickSerialPort.run(ctx, { slot: 1 });
+  assert.match(String(values.get("OSR6串口1")), /COM3/);
+  assert.match(String(values.get("OSR6串口状态")), /已连接/);
 });
 
-test("legacy windows settings normalize to native and preserve the device picker", async () => {
+test("legacy windows settings normalize to native", async () => {
   assert.equal(transportModule.serialBackend("windows"), "native");
-  const { ctx } = context({ serialBackend: "windows", autoConnect: false });
-  const picker = new SerialDevicePickerExtension(); picker.context = ctx;
-  assert.equal(picker.render().props.initialBackend, "native");
+  assert.equal(transportModule.serialBackend("web"), "web");
+  assert.equal(transportModule.serialBackend(undefined), "web");
 });
 
 test("embedded binaries cover desktop architectures and reject Android explicitly", () => {
@@ -402,15 +400,40 @@ test("embedded native driver enumerates actual system ports without opening hard
 test("the native editor view renders a real port selector and refresh action", () => {
   studioSettings.clear();
   studioSettings.set("osr6.transport", "serial");
-  studioSettings.set("osr6.serialBackend", "windows");
-  const html = renderToStaticMarkup(React.createElement(StudioSettingsPage));
-  assert.match(html, /<select[^>]*aria-label="串口"/);
-  assert.match(html, /请选择串口/);
-  assert.match(html, /<button>刷新系统串口<\/button>/);
-  assert.match(html, /桌面原生串口/);
-  assert.match(html, /测试设备（小幅试动）/);
-  assert.match(html, /50% → 60% → 50%/);
+  // 访问方式现在自动判定：宿主有 Node 就用系统串口，不再读 osr6.serialBackend。
+  const hadRequire = Object.prototype.hasOwnProperty.call(globalThis, "require");
+  const previousRequire = globalThis.require;
+  globalThis.require = () => { throw new Error("render must not load native code"); };
+  try {
+    const html = renderToStaticMarkup(React.createElement(StudioSettingsPage));
+    assert.match(html, /<select[^>]*aria-label="串口"/);
+    assert.match(html, /请选择串口/);
+    assert.match(html, /刷新系统串口/);
+    assert.match(html, /波特率/);
+    // VID/PID 已移除：不该再出现在页面上
+    assert.doesNotMatch(html, /USB 厂商/);
+    assert.match(html, /测试设备（小幅试动）/);
+    assert.match(html, /50% → 60% → 50%/);
+    // 串口模式只显示串口参数，不显示 UDP 参数
+    assert.doesNotMatch(html, /UDP 端口/);
+  } finally {
+    if (hadRequire) globalThis.require = previousRequire;
+    else delete globalThis.require;
+    studioSettings.clear();
+  }
+});
+
+test("the editor view falls back to browser authorization when the host has no Node", () => {
   studioSettings.clear();
+  studioSettings.set("osr6.transport", "serial");
+  try {
+    const html = renderToStaticMarkup(React.createElement(StudioSettingsPage));
+    assert.match(html, /添加串口…/);
+    assert.doesNotMatch(html, /刷新系统串口/);
+    assert.doesNotMatch(html, /UDP 端口/);
+  } finally {
+    studioSettings.clear();
+  }
 });
 
 test("editor native selection queries and releases a port using bundled serialport", async () => {
@@ -459,7 +482,7 @@ test("native Unix device paths and USB/Bluetooth metadata survive filtering and 
   ]);
   const all = await bridge.api.getPorts(); bridge.rows.reverse();
   assert.deepEqual(await bridge.api.getPorts(), all);
-  const usb = await listSerialDevices({ api: bridge.api, baudRate: 115200, kind: "usb", vendorId: 0x1a86 });
+  const usb = await listSerialDevices({ api: bridge.api, baudRate: 115200, kind: "usb" });
   assert.equal(usb.length, 1); assert.match(usb[0].label, /ttyUSB0/);
   const bluetooth = await listSerialDevices({ api: bridge.api, baudRate: 115200, kind: "bluetooth" });
   assert.equal(bluetooth.length, 2);

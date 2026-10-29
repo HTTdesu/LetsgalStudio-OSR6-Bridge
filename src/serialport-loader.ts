@@ -12,7 +12,8 @@ export interface SerialportNodeModules {
   events: typeof import("node:events");
   util: typeof import("node:util");
   tty: typeof import("node:tty");
-  child_process: typeof import("node:child_process");
+  /** bindings-cpp 在模块顶层就 require 它，因此每个平台加载时都要提供。 */
+  child_process?: typeof import("node:child_process");
 }
 
 // Cache only the stateless driver constructor. Device ownership remains scoped
@@ -20,6 +21,9 @@ export interface SerialportNodeModules {
 const loaded = new WeakMap<NodeJS.Process, typeof import("serialport").SerialPort>();
 
 export function selectSerialportBinary(platform: string, arch: string, libc?: string, armVersion?: string): EmbeddedBinary {
+  if (!binaries.length) {
+    throw new Error("当前入口未内嵌串口驱动。编辑器里请到预览的设备面板选择「桌面原生串口」；游戏内请使用内嵌驱动的运行时入口。");
+  }
   const found = binaries.find((entry) => entry.platform === platform && entry.architectures.includes(arch)
     && (!entry.libc || entry.libc === libc) && (!entry.armVersion || entry.armVersion === armVersion));
   if (!found) throw new Error(`扩展未包含 ${platform}/${arch}${libc ? "/" + libc : ""} 的串口驱动，请使用浏览器授权或为该平台重新构建。`);
@@ -34,13 +38,16 @@ export function loadSerialPort(modules: SerialportNodeModules): typeof import("s
   if (!Number.isInteger(Number(process.versions.napi)) || Number(process.versions.napi) < 6) {
     throw new Error("桌面串口需要支持 Node-API 6 的宿主，请更新 Studio。面板也可改用浏览器授权。");
   }
+  // 不用 process.report.getReport()：它是同步调用、内部要抓 V8 堆信息，
+  // 首次加载会卡几百毫秒。静态探测足以区分 musl / glibc。
   let libc: string | undefined;
   if (process.platform === "linux") {
-    const report = process.report?.getReport();
-    const header = typeof report === "object" && report !== null && "header" in report ? report.header : undefined;
-    libc = typeof header === "object" && header !== null
-      ? ("glibcVersionRuntime" in header ? "glibc" : "musl")
-      : (fs.existsSync("/etc/alpine-release") ? "musl" : "glibc");
+    libc = fs.existsSync("/etc/alpine-release")
+      || fs.existsSync("/lib/ld-musl-x86_64.so.1")
+      || fs.existsSync("/lib/ld-musl-aarch64.so.1")
+      || fs.existsSync("/lib/ld-musl-armhf.so.1")
+      ? "musl"
+      : "glibc";
   }
   const variables = process.config.variables as typeof process.config.variables & { arm_version?: number | string };
   const armVersion = process.arch === "arm64" ? "8" : String(variables.arm_version ?? "7");

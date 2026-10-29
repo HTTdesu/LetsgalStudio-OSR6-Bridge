@@ -15,14 +15,14 @@
         "h": 1080
       },
       "anchor": "tl",
+      "selectorId": "vui-5942c5d57c045cabbcf46cff8607eabf",
       "name": "背景",
       "style": {
         "fill": "#0b1219",
         "radius": 0,
         "opacity": 100
       },
-      "props": {},
-      "selectorId": "vui-5942c5d57c045cabbcf46cff8607eabf"
+      "props": {}
     },
     {
       "id": "eyebrow",
@@ -34,6 +34,7 @@
         "h": 24
       },
       "anchor": "tl",
+      "selectorId": "vui-0025c1943fda5adc9f901caf483cbac0",
       "name": "小标题",
       "style": {
         "fontSize": 20,
@@ -43,8 +44,7 @@
       },
       "props": {
         "text": "DEVICE"
-      },
-      "selectorId": "vui-0025c1943fda5adc9f901caf483cbac0"
+      }
     },
     {
       "id": "title",
@@ -56,6 +56,7 @@
         "h": 80
       },
       "anchor": "tl",
+      "selectorId": "vui-357e0b64b3505f80ab40316f11494fd8",
       "name": "标题",
       "style": {
         "fontSize": 64,
@@ -65,8 +66,7 @@
       },
       "props": {
         "text": "OSR6 设备"
-      },
-      "selectorId": "vui-357e0b64b3505f80ab40316f11494fd8"
+      }
     },
     {
       "id": "title-accent",
@@ -78,14 +78,14 @@
         "h": 4
       },
       "anchor": "tl",
+      "selectorId": "vui-c73f9d8601de5a02b7036c5545c22f8c",
       "name": "强调线",
       "style": {
         "fill": "#5fbbae",
         "radius": 0,
         "opacity": 100
       },
-      "props": {},
-      "selectorId": "vui-c73f9d8601de5a02b7036c5545c22f8c"
+      "props": {}
     },
     {
       "id": "btn-mode-udp",
@@ -97,6 +97,7 @@
         "h": 60
       },
       "anchor": "tl",
+      "selectorId": "vui-e3aef0e29a365226beb2d74509280c9b",
       "name": "用UDP",
       "style": {
         "fontSize": 24,
@@ -118,7 +119,6 @@
           "paramsJson": "{\"mode\":\"udp\"}"
         }
       },
-      "selectorId": "vui-e3aef0e29a365226beb2d74509280c9b",
       "visibleIf": {
         "logic": "all",
         "conditions": [
@@ -142,6 +142,7 @@
         "h": 60
       },
       "anchor": "tl",
+      "selectorId": "vui-0f9548c94b4e566b9c1bf876c19d87a5",
       "name": "用串口",
       "style": {
         "fontSize": 24,
@@ -163,7 +164,6 @@
           "paramsJson": "{\"mode\":\"serial\"}"
         }
       },
-      "selectorId": "vui-0f9548c94b4e566b9c1bf876c19d87a5",
       "visibleIf": {
         "logic": "all",
         "conditions": [
@@ -187,6 +187,7 @@
         "h": 250
       },
       "anchor": "tl",
+      "selectorId": "vui-eb035c98f6ef5009bccc117ff5f88aa7",
       "name": "UDP 卡片",
       "style": {
         "fill": "rgba(255, 255, 255, 0.045)",
@@ -207,8 +208,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-eb035c98f6ef5009bccc117ff5f88aa7"
+      }
     },
     {
       "id": "udp-addr-label",
@@ -220,6 +220,7 @@
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-d4e4cb0c4fb3501192b8a83005b32c3c",
       "name": "地址标签",
       "style": {
         "fontSize": 26,
@@ -241,8 +242,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-d4e4cb0c4fb3501192b8a83005b32c3c"
+      }
     },
     {
       "id": "udp-addr-value",
@@ -254,6 +254,7 @@
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-b819e799f4c75a4b81515e3b74cd5390",
       "name": "地址值",
       "style": {
         "fontSize": 26,
@@ -275,8 +276,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-b819e799f4c75a4b81515e3b74cd5390"
+      }
     },
     {
       "id": "udp-addr-edit",
@@ -288,6 +288,7 @@
         "h": 52
       },
       "anchor": "tl",
+      "selectorId": "vui-1449d0d32740557d925e0bfe64d0ee41",
       "name": "改地址",
       "style": {
         "fontSize": 22,
@@ -319,8 +320,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-1449d0d32740557d925e0bfe64d0ee41"
+      }
     },
     {
       "id": "udp-port-label",
@@ -332,6 +332,7 @@
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-963d2585d49a524aab3b512d9b092e12",
       "name": "端口标签",
       "style": {
         "fontSize": 26,
@@ -353,8 +354,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-963d2585d49a524aab3b512d9b092e12"
+      }
     },
     {
       "id": "udp-port-value",
@@ -366,6 +366,7 @@
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-00a7ee3ed96e5e7792406bea91601a59",
       "name": "端口值",
       "style": {
         "fontSize": 26,
@@ -387,8 +388,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-00a7ee3ed96e5e7792406bea91601a59"
+      }
     },
     {
       "id": "udp-port-edit",
@@ -400,6 +400,7 @@
         "h": 52
       },
       "anchor": "tl",
+      "selectorId": "vui-89afe769c2405ae5a11c92816778154a",
       "name": "改端口",
       "style": {
         "fontSize": 22,
@@ -431,8 +432,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-89afe769c2405ae5a11c92816778154a"
+      }
     },
     {
       "id": "serial-card",
@@ -441,9 +441,10 @@
         "x": 120,
         "y": 340,
         "w": 1680,
-        "h": 250
+        "h": 620
       },
       "anchor": "tl",
+      "selectorId": "vui-12a78daa30aa5d5abd1cf87a937c4828",
       "name": "串口卡片",
       "style": {
         "fill": "rgba(255, 255, 255, 0.045)",
@@ -464,120 +465,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-12a78daa30aa5d5abd1cf87a937c4828"
-    },
-    {
-      "id": "serial-index-label",
-      "type": "text",
-      "rect": {
-        "x": 170,
-        "y": 380,
-        "w": 240,
-        "h": 56
-      },
-      "anchor": "tl",
-      "name": "序号标签",
-      "style": {
-        "fontSize": 26,
-        "color": "rgba(244, 248, 247, 0.58)",
-        "letterSpacing": 2,
-        "opacity": 100
-      },
-      "props": {
-        "text": "串口序号"
-      },
-      "visibleIf": {
-        "logic": "all",
-        "conditions": [
-          {
-            "source": "game",
-            "target": "OSR6连接方式",
-            "valueType": "string",
-            "operator": "eq",
-            "value": "serial"
-          }
-        ]
-      },
-      "selectorId": "vui-cdbf47ae67245220a05cc72a4d16dae0"
-    },
-    {
-      "id": "serial-index-value",
-      "type": "text",
-      "rect": {
-        "x": 430,
-        "y": 380,
-        "w": 520,
-        "h": 56
-      },
-      "anchor": "tl",
-      "name": "序号值",
-      "style": {
-        "fontSize": 26,
-        "color": "rgba(233, 240, 244, 0.82)",
-        "letterSpacing": 2,
-        "opacity": 100
-      },
-      "props": {
-        "text": "{{OSR6串口序号}}"
-      },
-      "visibleIf": {
-        "logic": "all",
-        "conditions": [
-          {
-            "source": "game",
-            "target": "OSR6连接方式",
-            "valueType": "string",
-            "operator": "eq",
-            "value": "serial"
-          }
-        ]
-      },
-      "selectorId": "vui-bc2ee6d516b7564bb8ffd8f61e6888e0"
-    },
-    {
-      "id": "serial-index-edit",
-      "type": "button",
-      "rect": {
-        "x": 966,
-        "y": 382,
-        "w": 56,
-        "h": 52
-      },
-      "anchor": "tl",
-      "name": "改序号",
-      "style": {
-        "fontSize": 22,
-        "color": "#7fd4c8",
-        "fill": "rgba(127, 212, 200, 0.10)",
-        "borderColor": "rgba(127, 212, 200, 0.35)",
-        "borderWidth": 1,
-        "radius": 8,
-        "letterSpacing": 0,
-        "opacity": 100
-      },
-      "props": {
-        "text": "✎"
-      },
-      "events": {
-        "onClick": {
-          "target": "@com.httdesu.osr6-bridge/osr6-serial-index",
-          "type": "ui.open"
-        }
-      },
-      "visibleIf": {
-        "logic": "all",
-        "conditions": [
-          {
-            "source": "game",
-            "target": "OSR6连接方式",
-            "valueType": "string",
-            "operator": "eq",
-            "value": "serial"
-          }
-        ]
-      },
-      "selectorId": "vui-e5c9ab6aed4d53ee993ae6bb178de9c4"
+      }
     },
     {
       "id": "serial-baud-label",
@@ -589,6 +477,7 @@
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-18495efddfc6580abe568336ef3ddbda",
       "name": "波特率标签",
       "style": {
         "fontSize": 26,
@@ -610,8 +499,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-18495efddfc6580abe568336ef3ddbda"
+      }
     },
     {
       "id": "serial-baud-value",
@@ -619,15 +507,16 @@
       "rect": {
         "x": 430,
         "y": 452,
-        "w": 520,
+        "w": 500,
         "h": 56
       },
       "anchor": "tl",
+      "selectorId": "vui-3448600a26f4593cb07e1d1109efcced",
       "name": "波特率值",
       "style": {
         "fontSize": 26,
-        "color": "rgba(233, 240, 244, 0.82)",
-        "letterSpacing": 2,
+        "color": "rgba(233, 240, 244, 0.85)",
+        "letterSpacing": 1,
         "opacity": 100
       },
       "props": {
@@ -644,8 +533,7 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-3448600a26f4593cb07e1d1109efcced"
+      }
     },
     {
       "id": "serial-baud-edit",
@@ -657,9 +545,10 @@
         "h": 52
       },
       "anchor": "tl",
+      "selectorId": "vui-5b40aef7d07356729b197109de80488f",
       "name": "改波特率",
       "style": {
-        "fontSize": 22,
+        "fontSize": 24,
         "color": "#7fd4c8",
         "fill": "rgba(127, 212, 200, 0.10)",
         "borderColor": "rgba(127, 212, 200, 0.35)",
@@ -688,19 +577,19 @@
             "value": "serial"
           }
         ]
-      },
-      "selectorId": "vui-5b40aef7d07356729b197109de80488f"
+      }
     },
     {
       "id": "btn-test",
       "type": "button",
       "rect": {
         "x": 120,
-        "y": 640,
+        "y": 1000,
         "w": 230,
         "h": 64
       },
       "anchor": "tl",
+      "selectorId": "vui-9e27d78188e65477b32f3084c9f75ef8",
       "name": "测试连接",
       "style": {
         "fontSize": 24,
@@ -720,19 +609,19 @@
           "type": "ext.call",
           "target": "com.httdesu.osr6-bridge/test-device"
         }
-      },
-      "selectorId": "vui-9e27d78188e65477b32f3084c9f75ef8"
+      }
     },
     {
       "id": "btn-close",
       "type": "button",
       "rect": {
         "x": 1570,
-        "y": 640,
+        "y": 1000,
         "w": 230,
         "h": 64
       },
       "anchor": "tl",
+      "selectorId": "vui-cac407282339512187777ab28f01ab97",
       "name": "关闭",
       "style": {
         "fontSize": 24,
@@ -751,14 +640,11 @@
         "onClick": {
           "type": "ui.close"
         }
-      },
-      "selectorId": "vui-cac407282339512187777ab28f01ab97"
+      }
     },
     {
       "id": "button-mvqt9rb9-2347",
-      "selectorId": "vui-4b6a3a836ad5449588b56b4a2dd5ef48",
       "type": "button",
-      "name": "用UDP-未选",
       "rect": {
         "x": 120,
         "y": 250,
@@ -766,6 +652,8 @@
         "h": 60
       },
       "anchor": "c",
+      "selectorId": "vui-4b6a3a836ad5449588b56b4a2dd5ef48",
+      "name": "用UDP-未选",
       "style": {
         "fontSize": 24,
         "color": "#f4f8f7",
@@ -801,9 +689,7 @@
     },
     {
       "id": "button-mvqt9rb9-2348",
-      "selectorId": "vui-3c4b17be31614832a3396bbfb465e0b3",
       "type": "button",
-      "name": "用串口-选中",
       "rect": {
         "x": 370,
         "y": 250,
@@ -811,6 +697,8 @@
         "h": 60
       },
       "anchor": "c",
+      "selectorId": "vui-3c4b17be31614832a3396bbfb465e0b3",
+      "name": "用串口-选中",
       "style": {
         "fontSize": 24,
         "color": "#06201c",
@@ -840,6 +728,938 @@
             "valueType": "string",
             "operator": "eq",
             "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-label",
+      "type": "text",
+      "name": "类型标签",
+      "rect": {
+        "x": 170,
+        "y": 380,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "串口类型"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-status-label",
+      "type": "text",
+      "name": "状态标签",
+      "rect": {
+        "x": 170,
+        "y": 524,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "状态"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-status-value",
+      "type": "text",
+      "name": "状态值",
+      "rect": {
+        "x": 430,
+        "y": 524,
+        "w": 1240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.85)",
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口状态}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-list-label",
+      "type": "text",
+      "name": "列表标签",
+      "rect": {
+        "x": 170,
+        "y": 596,
+        "w": 240,
+        "h": 56
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(244, 248, 247, 0.58)",
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "串口"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-refresh",
+      "type": "button",
+      "name": "刷新列表",
+      "rect": {
+        "x": 1200,
+        "y": 598,
+        "w": 200,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "刷新列表"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/scan-serial-ports"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-selected",
+      "type": "text",
+      "name": "当前串口",
+      "rect": {
+        "x": 430,
+        "y": 596,
+        "w": 500,
+        "h": 56
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 26,
+        "color": "rgba(233, 240, 244, 0.85)",
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口选择}}"
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-open",
+      "type": "button",
+      "name": "选择串口",
+      "rect": {
+        "x": 966,
+        "y": 598,
+        "w": 220,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "选择串口 ▾"
+      },
+      "events": {
+        "onClick": {
+          "type": "value.set",
+          "source": "game",
+          "target": "OSR6串口菜单",
+          "valueType": "string",
+          "value": "open"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-menu-backdrop",
+      "type": "rect",
+      "name": "菜单外遮罩",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      "anchor": "tl",
+      "style": {
+        "fill": "rgba(3, 8, 13, 0.45)",
+        "radius": 0,
+        "opacity": 100
+      },
+      "props": {},
+      "events": {
+        "onClick": {
+          "type": "value.set",
+          "source": "game",
+          "target": "OSR6串口菜单",
+          "valueType": "string",
+          "value": "closed"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-menu-bg",
+      "type": "rect",
+      "name": "菜单底板",
+      "rect": {
+        "x": 430,
+        "y": 656,
+        "w": 1010,
+        "h": 292
+      },
+      "anchor": "tl",
+      "style": {
+        "fill": "rgba(8, 16, 23, 0.98)",
+        "radius": 12,
+        "borderColor": "rgba(127,212,200,0.35)",
+        "borderWidth": 1,
+        "opacity": 100
+      },
+      "props": {},
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-opt-1",
+      "type": "button",
+      "name": "串口选项 1",
+      "rect": {
+        "x": 444,
+        "y": 664,
+        "w": 982,
+        "h": 44
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "rgba(233, 240, 244, 0.92)",
+        "fill": "rgba(255,255,255,0.06)",
+        "borderColor": "rgba(127, 212, 200, 0.22)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口1}}"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/pick-serial-port",
+          "paramsJson": "{\"slot\":1}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口1",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "—"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-opt-2",
+      "type": "button",
+      "name": "串口选项 2",
+      "rect": {
+        "x": 444,
+        "y": 716,
+        "w": 982,
+        "h": 44
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "rgba(233, 240, 244, 0.92)",
+        "fill": "rgba(255,255,255,0.06)",
+        "borderColor": "rgba(127, 212, 200, 0.22)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口2}}"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/pick-serial-port",
+          "paramsJson": "{\"slot\":2}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口2",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "—"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-opt-3",
+      "type": "button",
+      "name": "串口选项 3",
+      "rect": {
+        "x": 444,
+        "y": 768,
+        "w": 982,
+        "h": 44
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "rgba(233, 240, 244, 0.92)",
+        "fill": "rgba(255,255,255,0.06)",
+        "borderColor": "rgba(127, 212, 200, 0.22)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口3}}"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/pick-serial-port",
+          "paramsJson": "{\"slot\":3}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口3",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "—"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-opt-4",
+      "type": "button",
+      "name": "串口选项 4",
+      "rect": {
+        "x": 444,
+        "y": 820,
+        "w": 982,
+        "h": 44
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "rgba(233, 240, 244, 0.92)",
+        "fill": "rgba(255,255,255,0.06)",
+        "borderColor": "rgba(127, 212, 200, 0.22)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口4}}"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/pick-serial-port",
+          "paramsJson": "{\"slot\":4}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口4",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "—"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-opt-5",
+      "type": "button",
+      "name": "串口选项 5",
+      "rect": {
+        "x": 444,
+        "y": 872,
+        "w": 982,
+        "h": 44
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "rgba(233, 240, 244, 0.92)",
+        "fill": "rgba(255,255,255,0.06)",
+        "borderColor": "rgba(127, 212, 200, 0.22)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 1,
+        "opacity": 100
+      },
+      "props": {
+        "text": "{{OSR6串口5}}"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/pick-serial-port",
+          "paramsJson": "{\"slot\":5}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口5",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "—"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-menu-close",
+      "type": "button",
+      "name": "收起菜单",
+      "rect": {
+        "x": 1254,
+        "y": 898,
+        "w": 172,
+        "h": 30
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 18,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 8,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "收起"
+      },
+      "events": {
+        "onClick": {
+          "type": "value.set",
+          "source": "game",
+          "target": "OSR6串口菜单",
+          "valueType": "string",
+          "value": "closed"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6串口菜单",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "open"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-auto-off",
+      "type": "button",
+      "name": "自动识别（未选）",
+      "rect": {
+        "x": 430,
+        "y": 378,
+        "w": 170,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "自动识别"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"auto\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-auto-on",
+      "type": "button",
+      "name": "自动识别（选中）",
+      "rect": {
+        "x": 430,
+        "y": 378,
+        "w": 170,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#06201c",
+        "fill": "#5fbbae",
+        "borderColor": "rgba(127,212,200,0.9)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "自动识别"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"auto\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "auto"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-usb-off",
+      "type": "button",
+      "name": "USB（未选）",
+      "rect": {
+        "x": 612,
+        "y": 378,
+        "w": 110,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "USB"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"usb\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "usb"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-usb-on",
+      "type": "button",
+      "name": "USB（选中）",
+      "rect": {
+        "x": 612,
+        "y": 378,
+        "w": 110,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#06201c",
+        "fill": "#5fbbae",
+        "borderColor": "rgba(127,212,200,0.9)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "USB"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"usb\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "usb"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-bluetooth-off",
+      "type": "button",
+      "name": "蓝牙 SPP（未选）",
+      "rect": {
+        "x": 734,
+        "y": 378,
+        "w": 170,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#f4f8f7",
+        "fill": "rgba(255,255,255,0.07)",
+        "borderColor": "rgba(255,255,255,0.18)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "蓝牙 SPP"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"bluetooth\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "neq",
+            "value": "bluetooth"
+          }
+        ]
+      }
+    },
+    {
+      "id": "serial-kind-bluetooth-on",
+      "type": "button",
+      "name": "蓝牙 SPP（选中）",
+      "rect": {
+        "x": 734,
+        "y": 378,
+        "w": 170,
+        "h": 52
+      },
+      "anchor": "tl",
+      "style": {
+        "fontSize": 24,
+        "color": "#06201c",
+        "fill": "#5fbbae",
+        "borderColor": "rgba(127,212,200,0.9)",
+        "borderWidth": 1,
+        "radius": 10,
+        "letterSpacing": 2,
+        "opacity": 100
+      },
+      "props": {
+        "text": "蓝牙 SPP"
+      },
+      "events": {
+        "onClick": {
+          "type": "ext.call",
+          "target": "com.httdesu.osr6-bridge/set-serial-kind",
+          "paramsJson": "{\"kind\":\"bluetooth\"}"
+        }
+      },
+      "visibleIf": {
+        "logic": "all",
+        "conditions": [
+          {
+            "source": "game",
+            "target": "OSR6连接方式",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "serial"
+          },
+          {
+            "source": "game",
+            "target": "OSR6串口类型",
+            "valueType": "string",
+            "operator": "eq",
+            "value": "bluetooth"
           }
         ]
       }

@@ -25,33 +25,42 @@ async function loadBundle(file) {
 }
 
 test("built runtime loads without a file base and enumerates through the embedded driver", async (t) => {
-  const { SerialDevicePickerExtension } = await loadBundle("index.mjs");
+  const { default: Osr6Extension } = await loadBundle("index.mjs");
   const abort = new AbortController();
   const nativeCalls = [];
-  const picker = new SerialDevicePickerExtension();
-  picker.context = {
-    flow: { signal: abort.signal }, variables: { get() {} },
+  const vars = new Map();
+  const ctx = {
+    flow: { signal: abort.signal },
+    variables: { get: (name) => vars.get(name), set: (name, value) => { vars.set(name, value); } },
     settings: { get(name) { return ({ transport: "serial", serialBackend: "windows", baudRate: 115200 })[name.replace(/^osr6\./, "")]; } },
     native: { node: { require(name) {
       assert.match(name, /^node:/); nativeCalls.push(name); return require(name);
     } } },
   };
-  const { props } = picker.render();
-  assert.equal(props.initialBackend, "native");
-  assert.equal(nativeCalls.length, 0, "import/render must not initialize native code");
-  const api = props.getOptions("native").api;
-  try {
-    const ports = await api.getPorts();
-    assert.ok(Array.isArray(ports));
-    t.diagnostic("Built bundle system ports: " + ports.map((port) => port.displayName).join(", "));
-  } finally { await api.dispose(); abort.abort(); }
+  // 面板改成引擎托管 UI 后，枚举由 scanSerialPorts 完成：它把结果写进 OSR6串口1..5。
+  const summary = await Osr6Extension.scanSerialPorts.run(ctx, {});
+  assert.match(summary, /找到|没有找到/);
+  assert.equal(vars.size >= 5, true, "五个槽位变量都应写入");
+  assert.ok(nativeCalls.includes("node:process"), "枚举必须走内嵌驱动");
+  const labels = [1, 2, 3, 4, 5].map((slot) => vars.get("OSR6串口" + slot));
+  t.diagnostic("Built bundle system ports: " + labels.filter((label) => label !== "—").join(", "));
+  abort.abort();
 });
 
 test("built editor loads without native access and shows migrated settings", async () => {
   const { settingsPage } = await loadBundle("studio.js");
-  settings.set("osr6.transport", "serial"); settings.set("osr6.serialBackend", "windows");
+  settings.set("osr6.transport", "serial");
+  // 访问方式自动判定：宿主有 Node 才显示桌面原生串口。
+  const hadRequire = Object.prototype.hasOwnProperty.call(globalThis, "require");
+  const previousRequire = globalThis.require;
+  globalThis.require = () => { throw new Error("render must not load native code"); };
   try {
     const html = renderToStaticMarkup(React.createElement(settingsPage));
-    assert.match(html, /桌面原生串口/); assert.match(html, /50% → 60% → 50%/);
-  } finally { settings.clear(); }
+    assert.match(html, /刷新系统串口/);
+    assert.match(html, /50% → 60% → 50%/);
+  } finally {
+    if (hadRequire) globalThis.require = previousRequire;
+    else delete globalThis.require;
+    settings.clear();
+  }
 });

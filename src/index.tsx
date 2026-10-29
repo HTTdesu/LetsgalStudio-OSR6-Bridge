@@ -2,8 +2,7 @@ import { Extension, extension, settings, type ExtensionContext } from "@avg-stud
 import { decodeCarrierWav } from "./carrier";
 import { type Osr6AxisSetting, type Osr6Settings } from "./engine";
 import { runtimeForSignal, type RuntimeState } from "./runtime-state";
-import { SerialDevicePicker, type SerialDevicePickerProps } from "./serial-device-picker";
-import { errorMessage, parseUsbId, serialBackend, serialKind, SerialSelectionRequiredError, type SerialBackend, type SerialOptions } from "./transport";
+import { describeSerialPort, errorMessage, getSerialApi, listSerialDevices, serialBackend, serialKind, SerialSelectionRequiredError, type SerialApiLike, type SerialBackend, type SerialOptions, type SerialPortLike } from "./transport";
 import { NativeSerialApi } from "./native-serial";
 import { loadSerialPort, type SerialportNodeModules } from "./serialport-loader";
 import {
@@ -216,7 +215,6 @@ function readSettings(ctx: {
   const playerHost = readDeviceHost(ctx);
   const playerPort = readDevicePort(ctx);
   const playerTransport = readDeviceTransport(ctx);
-  const playerSerialIndex = readNumberVariable(ctx, "OSR6串口序号");
   const playerBaudRate = readNumberVariable(ctx, "OSR6波特率");
   return {
     // 玩家选过连接方式就用玩家的，否则跟随作者设置。
@@ -231,14 +229,8 @@ function readSettings(ctx: {
       playerPort >= 1 && playerPort <= 65535
         ? playerPort
         : Math.round(readNumber(ctx, "udpPort", 8000, 1, 65535)),
-    serialVendorId: readString(ctx, "serialVendorId", ""),
-    serialProductId: readString(ctx, "serialProductId", ""),
     serialKind: serialKind(ctx.variables?.get("OSR6串口类型") || readRaw(ctx, "serialKind")),
     serialBackend: serialBackend(ctx.variables?.get("OSR6串口访问方式") || readRaw(ctx, "serialBackend")),
-    serialPortIndex:
-      playerSerialIndex >= 0 && playerSerialIndex <= 9
-        ? Math.round(playerSerialIndex)
-        : Math.round(readNumber(ctx, "serialPortIndex", 0, 0, 9)),
     baudRate:
       playerBaudRate >= 1200 && playerBaudRate <= 921600
         ? Math.round(playerBaudRate)
@@ -390,18 +382,22 @@ interface GroupPlaybackParams {
   interpolation: string;
 }
 
-const SERIAL_PICKER_ID = "osr6-serial-picker";
+const SETTINGS_DOC_NAME = "@com.httdesu.osr6-bridge/osr6-settings";
+/** 面板里固定 5 个槽位（UI 文档不能动态生成行）。 */
+const SERIAL_SLOT_COUNT = 5;
+const serialSlotVariable = (slot: number) => `OSR6串口${slot}`;
+const SERIAL_STATUS_VARIABLE = "OSR6串口状态";
+const SERIAL_SELECTED_VARIABLE = "OSR6串口选择";
+const SERIAL_MENU_VARIABLE = "OSR6串口菜单";
 
 function connectionKey(config: Osr6Settings): string {
   return JSON.stringify([config.transport, config.udpHost, config.udpPort, config.serialKind, config.serialBackend,
-    config.serialVendorId, config.serialProductId, config.serialPortIndex, config.baudRate]);
+    config.baudRate]);
 }
 
 function serialOptions(config: Osr6Settings): SerialOptions {
   return {
     baudRate: config.baudRate, kind: config.serialKind,
-    vendorId: config.serialKind === "bluetooth" ? undefined : parseUsbId(config.serialVendorId),
-    productId: config.serialKind === "bluetooth" ? undefined : parseUsbId(config.serialProductId),
   };
 }
 
@@ -410,8 +406,9 @@ function nativeSerialApi(ctx: ExtensionContext): NativeSerialApi {
   if (!runtime.nativeSerial) {
     runtime.nativeSerial = new NativeSerialApi(() => {
       try {
-        return loadSerialPort({
-          process: ctx.native.node.require<SerialportNodeModules["process"]>("node:process"),
+        const processModule = ctx.native.node.require<SerialportNodeModules["process"]>("node:process");
+        const modules: SerialportNodeModules = {
+          process: processModule,
           buffer: ctx.native.node.require<SerialportNodeModules["buffer"]>("node:buffer"),
           fs: ctx.native.node.require<SerialportNodeModules["fs"]>("node:fs"),
           os: ctx.native.node.require<SerialportNodeModules["os"]>("node:os"),
@@ -422,8 +419,11 @@ function nativeSerialApi(ctx: ExtensionContext): NativeSerialApi {
           events: ctx.native.node.require<SerialportNodeModules["events"]>("node:events"),
           util: ctx.native.node.require<SerialportNodeModules["util"]>("node:util"),
           tty: ctx.native.node.require<SerialportNodeModules["tty"]>("node:tty"),
-          child_process: ctx.native.node.require<SerialportNodeModules["child_process"]>("node:child_process"),
-        });
+          // 必须无条件提供：bindings-cpp 的 linux-list 是模块顶层 require，
+          // 即便在 Windows/macOS 上加载也会请求它（只是不会真的 spawn）。
+          child_process: ctx.native.node.require<NonNullable<SerialportNodeModules["child_process"]>>("node:child_process"),
+        };
+        return loadSerialPort(modules);
       } catch (error) {
         throw new Error("桌面原生串口不可用：" + errorMessage(error) + "。此通道需要桌面宿主开放 Node 原生能力，网页版请使用浏览器授权。");
       }
@@ -432,6 +432,26 @@ function nativeSerialApi(ctx: ExtensionContext): NativeSerialApi {
   return runtime.nativeSerial;
 }
 
+/** 桌面宿主是否真的开放了 Node 原生能力（网页版没有）。 */
+function hasNativeNode(ctx: ExtensionContext): boolean {
+  try {
+    return typeof ctx.native?.node?.require === "function";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 串口访问方式自动回落，作者不用再选：
+ * 桌面（有 Node）优先系统串口，网页退回 Web Serial；设置里的值只作为提示。
+ */
+function serialApiFor(ctx: ExtensionContext, config: Osr6Settings): SerialApiLike | undefined {
+  const native = hasNativeNode(ctx);
+  if (!native) return undefined;
+  if (config.serialBackend === "native") return nativeSerialApi(ctx);
+  // 明确要求浏览器授权时才用 Web Serial；没有 Web Serial 就退回原生。
+  return getSerialApi() ? undefined : nativeSerialApi(ctx);
+}
 /** 所有连接入口共用；自动连接只复用授权，绝不弹设备授权窗口。 */
 async function reconnectNow(ctx: ExtensionContext): Promise<string> {
   const runtime = getRuntime(ctx);
@@ -443,7 +463,7 @@ async function reconnectNow(ctx: ExtensionContext): Promise<string> {
   await runtime.engine.connect(config, {
     loadDgram: () => ctx.native.node.require("node:dgram"),
     selectedPort: config.transport === "serial" ? runtime.selectedPort : undefined,
-    serialApi: config.transport === "serial" && config.serialBackend === "native" ? nativeSerialApi(ctx) : undefined,
+    serialApi: config.transport === "serial" ? serialApiFor(ctx, config) : undefined,
     signal: runtime.signal,
   });
   return runtime.engine.endpoint ?? "";
@@ -461,12 +481,86 @@ async function connectFromUser(ctx: ExtensionContext): Promise<string> {
   }
 }
 
+/** 扫描可用串口并把结果写进玩家变量，供 UI 文档里的固定槽位显示。 */
+async function scanSerialPorts(ctx: ExtensionContext): Promise<string> {
+  const runtime = getRuntime(ctx);
+  const config = readSettings(ctx);
+  let slots: SerialPortLike[] = [];
+  let status: string;
+  try {
+    const devices = await listSerialDevices({ ...serialOptions(config), api: serialApiFor(ctx, config) });
+    slots = devices.map((item) => item.port);
+    status = slots.length
+      ? `找到 ${slots.length} 个串口，点下面的按钮连接`
+      : config.serialKind === "bluetooth"
+        ? "没有找到蓝牙串口：请先在系统设置里配对设备"
+        : "没有找到串口：检查数据线和驱动，或改用蓝牙";
+  } catch (error) {
+    status = "读取串口列表失败：" + errorMessage(error);
+  }
+  runtime.portSlots = slots;
+  for (let slot = 1; slot <= SERIAL_SLOT_COUNT; slot += 1) {
+    const port = slots[slot - 1];
+    ctx.variables.set(serialSlotVariable(slot), port ? describeSerialPort(port) : "—");
+  }
+  ctx.variables.set(SERIAL_STATUS_VARIABLE, status);
+  // 每次进入串口页都从收起状态开始，避免上次展开的菜单残留。
+  ctx.variables.set(SERIAL_MENU_VARIABLE, "closed");
+  // 类型变量必须存在：界面上「选中/未选中」两组按钮都靠它判断，
+  // 变量缺失时任何条件都为假，三颗按钮会整体消失。
+  if (!ctx.variables.get("OSR6串口类型")) {
+    ctx.variables.set("OSR6串口类型", config.serialKind ?? "auto");
+  }
+  if (!ctx.variables.get(SERIAL_SELECTED_VARIABLE)) {
+    ctx.variables.set(SERIAL_SELECTED_VARIABLE, slots.length ? "未选择（点右侧「选择串口」）" : "无可用串口");
+  }
+  return status;
+}
+
+/**
+ * 脚本侧需要玩家选串口时：扫描一次并打开设置页（串口页签里就是设备列表）。
+ * 从设置页点「用串口」不会走这里——那时页面本来就开着，只刷新列表。
+ */
 async function showSerialPicker(ctx: ExtensionContext): Promise<void> {
   const runtime = getRuntime(ctx);
   runtime.stopPlaybacks();
   runtime.clearTestTimers();
   runtime.engine.stop();
-  await ctx.ui.show(SERIAL_PICKER_ID, {}, { modal: true });
+  await scanSerialPorts(ctx);
+  // 文档界面走 visualUI.open；ctx.ui.show 只用于程序（React）UI 模块。
+  await ctx.visualUI.open(SETTINGS_DOC_NAME, { modal: true });
+}
+
+/** 面板里点第 slot 个串口：记住它并立即连接。 */
+async function pickSerialSlot(ctx: ExtensionContext, slot: number): Promise<string> {
+  const runtime = getRuntime(ctx);
+  if (runtime.signal.aborted) throw new Error("运行已结束。");
+  const port = runtime.portSlots[slot - 1];
+  if (!port) throw new Error("这个位置没有串口，请先点「刷新列表」。");
+  const config = readSettings(ctx);
+  runtime.stopPlaybacks();
+  runtime.clearTestTimers();
+  runtime.selectedPort = port;
+  runtime.connectionKey = connectionKey(config);
+  ctx.variables.set(DEVICE_TRANSPORT_VARIABLE, "serial");
+  ctx.variables.set(SERIAL_STATUS_VARIABLE, "正在连接 " + describeSerialPort(port) + "…");
+  try {
+    await runtime.engine.connect(config, {
+      loadDgram: () => ctx.native.node.require("node:dgram"),
+      selectedPort: port,
+      serialApi: serialApiFor(ctx, config),
+      signal: runtime.signal,
+    });
+    const endpoint = runtime.engine.endpoint ?? "";
+    ctx.variables.set(SERIAL_SELECTED_VARIABLE, describeSerialPort(port));
+    ctx.variables.set(SERIAL_MENU_VARIABLE, "closed");
+    ctx.variables.set(SERIAL_STATUS_VARIABLE, "已连接：" + endpoint);
+    return endpoint;
+  } catch (error) {
+    ctx.variables.set(SERIAL_MENU_VARIABLE, "closed");
+    ctx.variables.set(SERIAL_STATUS_VARIABLE, "连接失败：" + errorMessage(error));
+    throw error;
+  }
 }
 
 function startRuntime(ctx: ExtensionContext): void {
@@ -526,23 +620,6 @@ class Osr6Extension extends Extension {
       .range(1, 65535)
       .describe("TCode over UDP 的默认端口是 8000。")
       .enabledWhen("transport", "udp"),
-    serialVendorId: s
-      .string("串口 USB 厂商 ID（可选）")
-      .default("")
-      .describe("形如 0x1a86 或 6790。仅筛选 USB；蓝牙模式忽略。多个候选必须由玩家选择。")
-      .enabledWhen("transport", "serial"),
-    serialProductId: s
-      .string("串口 USB 产品 ID（可选）")
-      .default("")
-      .enabledWhen("transport", "serial"),
-    serialPortIndex: s
-      .number("串口序号")
-      .default(0)
-      .range(0, 9)
-      .describe(
-        "已授权完整列表的序号（从 0 开始），用于编辑器测试与兼容旧配置；游戏中多个候选必须手动选设备。",
-      )
-      .enabledWhen("transport", "serial"),
     baudRate: s
       .number("串口波特率")
       .default(115200)
@@ -678,6 +755,56 @@ class Osr6Extension extends Extension {
     description: "打开 USB / 传统蓝牙 SPP 设备选择面板，适用于桌面和支持 Web Serial 的安全网页。",
     async run(ctx) {
       await showSerialPicker(ctx);
+    },
+  });
+
+  /** 面板「刷新列表」用：重新扫描系统串口，结果写进 OSR6串口1..5 变量。 */
+  static scanSerialPorts = this.method({
+    title: "刷新串口列表",
+    description: "重新扫描可用串口并写进面板变量；玩家面板的「刷新列表」按钮调用的就是它。",
+    hidden: true,
+    returns: { type: "string", label: "扫描结果" },
+    async run(ctx) {
+      return await scanSerialPorts(ctx);
+    },
+  });
+
+  /** 面板里点某个槽位：按序号连接（UI 动作只能传字面量，所以每个槽位一个调用）。 */
+  static pickSerialPort = this.method({
+    title: "连接串口槽位",
+    description: "连接玩家面板里第 N 个串口（1–5）。",
+    hidden: true,
+    returns: { type: "string", label: "连接端点" },
+    schema: {
+      slot: { type: "number", label: "槽位", min: 1, max: SERIAL_SLOT_COUNT, step: 1, default: 1 },
+    },
+    async run(ctx, params) {
+      const slot = Math.round(Number(params.slot ?? 1));
+      return await pickSerialSlot(ctx, Math.min(SERIAL_SLOT_COUNT, Math.max(1, slot)));
+    },
+  });
+
+  /** 面板里切串口类型：写变量后重新扫描。 */
+  static setSerialKind = this.method({
+    title: "切换串口类型",
+    description: "面板里的「自动 / USB / 蓝牙 SPP」按钮调用它，切换后重新扫描列表。",
+    hidden: true,
+    returns: { type: "string", label: "扫描结果" },
+    schema: {
+      kind: {
+        type: "enum",
+        label: "串口类型",
+        options: [
+          { value: "auto", label: "自动识别" },
+          { value: "usb", label: "USB" },
+          { value: "bluetooth", label: "传统蓝牙 SPP" },
+        ],
+        default: "auto",
+      },
+    },
+    async run(ctx, params) {
+      ctx.variables.set("OSR6串口类型", serialKind(params.kind));
+      return await scanSerialPorts(ctx);
     },
   });
 
@@ -1072,39 +1199,3 @@ class Osr6Extension extends Extension {
 }
 
 export default Osr6Extension;
-
-@extension({ id: SERIAL_PICKER_ID, label: "串口设备选择", hidden: true })
-export class SerialDevicePickerExtension extends Extension<SerialDevicePickerProps> {
-  render() {
-    const ctx = this.context;
-    const runtime = getRuntime(ctx);
-    return {
-      component: SerialDevicePicker,
-      props: {
-        signal: runtime.signal,
-        initialBackend: readSettings(ctx).serialBackend,
-        getOptions: (backend?: SerialBackend) => ({
-          ...serialOptions(readSettings(ctx)),
-          api: backend === "native" ? nativeSerialApi(ctx) : undefined,
-        }),
-        snapshot: () => runtime.engine.snapshot(),
-        connect: async (port, kind, baudRate, backend = readSettings(ctx).serialBackend) => {
-          if (runtime.signal.aborted) throw new Error("运行已结束。");
-          if (!Number.isInteger(baudRate) || baudRate < 1200 || baudRate > 921600) throw new Error("波特率必须是 1200–921600 之间的整数。");
-          ctx.variables.set(DEVICE_TRANSPORT_VARIABLE, "serial");
-          ctx.variables.set("OSR6串口类型", kind);
-          ctx.variables.set("OSR6波特率", String(baudRate));
-          ctx.variables.set("OSR6串口访问方式", backend ?? "web");
-          runtime.selectedPort = port;
-          await reconnectNow(ctx);
-        },
-        disconnect: async () => {
-          runtime.stopPlaybacks(); runtime.clearTestTimers();
-          await runtime.engine.disconnect();
-        },
-        stop: () => { runtime.stopPlaybacks(); runtime.clearTestTimers(); runtime.engine.stop(); },
-        close: async () => { await ctx.ui.hide(SERIAL_PICKER_ID); },
-      } satisfies SerialDevicePickerProps,
-    };
-  }
-}

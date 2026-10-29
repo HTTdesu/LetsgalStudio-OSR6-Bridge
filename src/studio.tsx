@@ -12,20 +12,9 @@
  * - 串口测试临时打开并释放端口，不建立常驻连接，请先断开预览设备。
  */
 import { useEffect, useRef, useState } from "react";
-import {
-  AutoSettings,
-  Button,
-  FieldRow,
-  Panel,
-  Section,
-  Select,
-  Segmented,
-  Switch,
-  TextInput,
-  toast,
-  useSetting,
-  useStudioLocale,
-} from "@avg-studio/studio-ui";
+import { AutoSettings, toast, useSetting, useStudioLocale } from "@avg-studio/studio-ui";
+import { Btn, Card, Dropdown, Input, Row, Segmented, Toggle, Value } from "./ui-kit";
+import { COLORS, TYPE } from "./ui-theme";
 import { encodeCarrierWav } from "./carrier";
 import { parseFunscript } from "./funscript";
 import { testSerialDevice } from "./serial-probe";
@@ -33,7 +22,7 @@ import { probeUdpDevice, type UdpProbeModule } from "./udp-probe";
 import { createStudioSerialApi } from "./studio-serial";
 import type { NativeSerialApi } from "./native-serial";
 import {
-  errorMessage, listSerialDevices, parseUsbId, requestSerialDevice, serialBackend, serialKind, serialRequestErrorMessage,
+  errorMessage, listSerialDevices, requestSerialDevice, serialBackend, serialKind, serialRequestErrorMessage,
   serialUnavailableReason, describeSerialPort, type SerialApiLike, type SerialOptions, type SerialPortLike,
 } from "./transport";
 
@@ -55,6 +44,9 @@ interface Text {
   mode: string;
   modeUdp: string;
   modeSerial: string;
+  deviceHost: string;
+  devicePort: string;
+  baudRate: string;
   status: string;
   connHint: string;
   noNode: string;
@@ -112,6 +104,9 @@ const TEXT: Record<string, Text> = {
     mode: "连接方式",
     modeUdp: "WiFi / UDP",
     modeSerial: "USB / 蓝牙串口",
+    deviceHost: "设备地址",
+    devicePort: "UDP 端口",
+    baudRate: "波特率",
     status: "状态",
     connHint:
       "测试会发送小幅动作并回到中位；串口测试结束后释放端口。请先断开预览中的同一设备。",
@@ -168,6 +163,9 @@ const TEXT: Record<string, Text> = {
     mode: "Transport",
     modeUdp: "WiFi / UDP",
     modeSerial: "USB / Bluetooth serial",
+    deviceHost: "Device address",
+    devicePort: "UDP port",
+    baudRate: "Baud rate",
     status: "Status",
     connHint:
       "Testing sends a small motion and recenters. The serial port is released afterward. Disconnect the same device in the preview first.",
@@ -237,14 +235,14 @@ function FolderRow() {
   const text = useText();
   const [folder, setFolder] = useSetting<string>("osr6.scriptImportFolder");
   return (
-    <FieldRow label={text.folder} description={text.folderHint}>
-      <TextInput
+    <Row label={text.folder} description={text.folderHint}>
+      <Input
         value={folder ?? "bgm"}
         onChange={setFolder}
         placeholder="bgm"
         ariaLabel={text.folder}
       />
-    </FieldRow>
+    </Row>
   );
 }
 
@@ -252,13 +250,13 @@ function OverwriteRow() {
   const text = useText();
   const [overwrite, setOverwrite] = useSetting<boolean>("osr6.scriptImportOverwrite");
   return (
-    <FieldRow label={text.overwrite}>
-      <Switch
+    <Row label={text.overwrite}>
+      <Toggle
         checked={overwrite === true}
         onChange={setOverwrite}
         ariaLabel={text.overwrite}
       />
-    </FieldRow>
+    </Row>
   );
 }
 
@@ -361,8 +359,8 @@ function ImportSection() {
   }
 
   return (
-    <Section title={text.importTitle}>
-      <FieldRow label={text.choose} description={text.hint}>
+    <Card title={text.importTitle}>
+      <Row label={text.choose} description={text.hint}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             ref={inputRef}
@@ -371,29 +369,29 @@ function ImportSection() {
             style={{ display: "none" }}
             onChange={onPick}
           />
-          <Button onClick={() => inputRef.current?.click()}>{text.choose}</Button>
+          <Btn onClick={() => inputRef.current?.click()}>{text.choose}</Btn>
           {picked ? (
-            <span style={{ color: "var(--fg-secondary)", fontSize: 12 }}>
+            <span style={{ color: COLORS.textMuted, fontSize: TYPE.hint }}>
               {text.chosen}：{picked.fileName}
             </span>
           ) : null}
         </div>
-      </FieldRow>
+      </Row>
 
       {picked ? (
         <>
-          <FieldRow label={text.summary}>
-            <span style={{ color: "var(--fg-secondary)", fontSize: 12 }}>
+          <Row label={text.summary}>
+            <span style={{ color: COLORS.textMuted, fontSize: TYPE.hint }}>
               {picked.actions} 个动作点 · {(picked.durationMs / 1000).toFixed(1)} s · WAV{" "}
               {picked.wavBytes} B
             </span>
-          </FieldRow>
-          <FieldRow label="">
-            <Button onClick={runImport}>{text.run}</Button>
-          </FieldRow>
+          </Row>
+          <Row label="">
+            <Btn tone="primary" onClick={runImport}>{text.run}</Btn>
+          </Row>
         </>
       ) : null}
-    </Section>
+    </Card>
   );
 }
 
@@ -403,7 +401,7 @@ function TransportRow({ disabled = false }: { disabled?: boolean }) {
   const text = useText();
   const [transport, setTransport] = useSetting<string>("osr6.transport");
   return (
-    <FieldRow label={text.mode}>
+    <Row label={text.mode}>
       <Segmented
         value={transport === "serial" ? "serial" : "udp"}
         onChange={setTransport}
@@ -414,7 +412,7 @@ function TransportRow({ disabled = false }: { disabled?: boolean }) {
         ariaLabel={text.mode}
         disabled={disabled}
       />
-    </FieldRow>
+    </Row>
   );
 }
 
@@ -444,6 +442,11 @@ async function probeUdp(host: string, port: number, signal: AbortSignal): Promis
   return probeUdpDevice({ host, port, signal, dgram });
 }
 
+/** 宿主有 Node（桌面 Studio / 桌面游戏）就用系统串口，浏览器里退回 Web Serial。 */
+function hostSupportsNativeSerial(): boolean {
+  return typeof (globalThis as unknown as { require?: unknown }).require === "function";
+}
+
 /** 浏览器和原生串口共用选择控件；设备必须由用户明确选择。 */
 function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
   onSelect: (port: SerialPortLike | undefined) => void;
@@ -452,12 +455,10 @@ function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
 }) {
   const text = useText();
   const [transport] = useSetting<string>("osr6.transport");
-  const [backend] = useSetting<string>("osr6.serialBackend");
-  const native = serialBackend(backend) === "native";
+  // 作者不需要选访问方式：自动按宿主能力判定。
+  const native = hostSupportsNativeSerial();
   const active = transport === "serial";
   const [kind, setKind] = useSetting<string>("osr6.serialKind");
-  const [vendor] = useSetting<string>("osr6.serialVendorId");
-  const [product] = useSetting<string>("osr6.serialProductId");
   const [devices, setDevices] = useState<Awaited<ReturnType<typeof listSerialDevices>>>([]);
   const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -468,8 +469,6 @@ function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
   const options = (): SerialOptions => ({
     api: native ? getNativeApi() : undefined,
     baudRate: 115200, kind: serialKind(kind),
-    vendorId: kind === "bluetooth" ? undefined : parseUsbId(vendor),
-    productId: kind === "bluetooth" ? undefined : parseUsbId(product),
   });
   function select(port: SerialPortLike | undefined, index?: number) {
     chosen.current = port;
@@ -505,7 +504,7 @@ function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
     select(undefined);
     if (active) void refresh();
     else { setDevices([]); ++generation.current; setBusy(false); }
-  }, [kind, vendor, product, backend, active]);
+  }, [kind, native, active]);
   async function grant() {
     setBusy(true);
     try {
@@ -523,45 +522,39 @@ function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
   }
   const reason = native ? null : serialUnavailableReason();
   return <>
-    <FieldRow label={text.serialType} description={native ? text.nativeHint : text.bluetoothHint}>
-      <Segmented value={serialKind(kind)} onChange={setKind} options={[
-        { value: "auto", label: text.serialAuto }, { value: "usb", label: "USB" },
-        { value: "bluetooth", label: text.serialBluetooth },
-      ]} ariaLabel={text.serialType} disabled={!active || busy || disabled} />
-    </FieldRow>
-    <FieldRow label={text.portLabel} description={!active ? text.portInactive : reason ?? undefined}>
+    {/* 串口类型由外层 DeviceSection 渲染（那里能按连接方式整体显隐） */}
+    <Row label={text.portLabel} description={!active ? text.portInactive : reason ?? undefined}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <Select value={choice} placeholder={busy ? text.loadingPorts : text.choosePort}
+        <Dropdown value={choice} placeholder={busy ? text.loadingPorts : text.choosePort}
           onChange={(value) => {
             const selected = devices.find((item) => item.index === Number(value));
             if (selected) select(selected.port, selected.index);
           }}
           options={devices.map((item) => ({ value: String(item.index), label: item.label }))}
           ariaLabel={text.portLabel} disabled={!active || busy || disabled || !!reason || devices.length === 0} />
-        <Button onClick={() => void refresh()} disabled={!active || !!reason || busy || disabled}>
+        <Btn onClick={() => void refresh()} disabled={!active || !!reason || busy || disabled}>
           {native ? text.refreshSystemPorts : text.portRefresh}
-        </Button>
-        {!native ? <Button onClick={() => void grant()} disabled={!active || !!reason || busy || disabled}>{text.portGrant}</Button> : null}
-        {!busy && !devices.length && !error ? <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>
+        </Btn>
+        {!native ? <Btn onClick={() => void grant()} disabled={!active || !!reason || busy || disabled}>{text.portGrant}</Btn> : null}
+        {!busy && !devices.length && !error ? <Value>
           {reason ?? (native ? text.nativePortsEmpty : text.portEmpty)}
-        </span> : null}
-        {error ? <span role="alert" style={{ fontSize: 12, color: "var(--warn)" }}>{error}</span> : null}
+        </Value> : null}
+        {error ? <span role="alert" style={{ fontSize: TYPE.hint, color: "#e08a8a" }}>{error}</span> : null}
       </div>
-    </FieldRow>
+    </Row>
   </>;
 }
 
 function DeviceSection() {
   const text = useText();
   const [transport] = useSetting<string>("osr6.transport");
-  const [host] = useSetting<string>("osr6.udpHost");
-  const [port] = useSetting<number>("osr6.udpPort");
-  const [baudRate] = useSetting<number>("osr6.baudRate");
-  const [vendorId] = useSetting<string>("osr6.serialVendorId");
-  const [productId] = useSetting<string>("osr6.serialProductId");
-  const [portIndex] = useSetting<number>("osr6.serialPortIndex");
-  const [kind] = useSetting<string>("osr6.serialKind");
-  const [backend, setBackend] = useSetting<string>("osr6.serialBackend");
+  const [host, setHost] = useSetting<string>("osr6.udpHost");
+  const [port, setPort] = useSetting<number>("osr6.udpPort");
+  const [baudRate, setBaudRate] = useSetting<number>("osr6.baudRate");
+  const [kind, setKind] = useSetting<string>("osr6.serialKind");
+  // 访问方式自动判定，不再作为作者选项；游戏运行时也会按同一规则回落。
+  const native = hostSupportsNativeSerial();
+  const backend: string = native ? "native" : "web";
   const [selectedPort, setSelectedPort] = useState<SerialPortLike>();
   const nativeApi = useRef<NativeSerialApi>();
   function getNativeApi(): NativeSerialApi {
@@ -585,7 +578,7 @@ function DeviceSection() {
   }, [backend, transport]);
 
   const [busy, setBusy] = useState(false);
-  const configuration = JSON.stringify([transport, backend, host, port, baudRate, kind, vendorId, productId]);
+  const configuration = JSON.stringify([transport, backend, host, port, baudRate, kind]);
   const currentSelection = useRef({ configuration, selectedPort });
   currentSelection.current = { configuration, selectedPort };
   const [outcome, setOutcome] = useState<{
@@ -599,7 +592,7 @@ function DeviceSection() {
 
   const endpoint =
     transport === "serial"
-      ? (selectedPort ? describeSerialPort(selectedPort) : "serial #" + (portIndex ?? 0)) + " @ " + (baudRate ?? 115200)
+      ? (selectedPort ? describeSerialPort(selectedPort) : "未选择串口") + " @ " + (baudRate ?? 115200)
       : (host ?? "192.168.1.1") + ":" + (port ?? 8000);
 
   async function test() {
@@ -622,8 +615,6 @@ function DeviceSection() {
           ? testSerialDevice({
             api: serialBackend(backend) === "native" ? getNativeApi() : undefined,
             baudRate: Math.round(baudRate ?? 115200), kind: serialKind(kind), selectedPort,
-            vendorId: kind === "bluetooth" ? undefined : parseUsbId(vendorId),
-            productId: kind === "bluetooth" ? undefined : parseUsbId(productId),
           }, controller.signal)
           : probeUdp((host ?? "").trim() || "192.168.1.1", Math.round(port ?? 8000), controller.signal);
       testTask.current = task;
@@ -677,46 +668,87 @@ function DeviceSection() {
       : (result.cancelled ? text.testStopped : result.ok ? (result.motion ? text.serialMotionDone : transport === "serial" ? text.serialOk : text.testOk) : text.testNoReply) +
         (shownDetail ? "：" + shownDetail : "");
 
+  const numberInput = (
+    raw: string,
+    apply: (value: number) => void,
+    min: number,
+    max: number,
+  ) => {
+    const next = Number(raw);
+    if (Number.isFinite(next)) apply(Math.min(max, Math.max(min, Math.round(next))));
+  };
+
   return (
-    <Section title={text.connTitle}>
+    <Card title={text.connTitle}>
       <TransportRow disabled={busy} />
-      <FieldRow label={text.serialBackend} disabled={transport !== "serial" || busy}>
-        <Segmented value={serialBackend(backend) === "native" ? "native" : "web"} onChange={setBackend} options={[
-          { value: "web", label: text.browserBackend }, { value: "native", label: text.nativeBackend },
-        ]} ariaLabel={text.serialBackend} />
-      </FieldRow>
-      <SerialPortRow onSelect={setSelectedPort} getNativeApi={getNativeApi} disabled={busy} />
-      <FieldRow label={text.status} description={text.connHint}>
-        <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>
+      {transport === "serial" ? (
+        <>
+          <Row label={text.serialType} description={native ? text.nativeHint : text.bluetoothHint} disabled={busy}>
+            <Segmented value={serialKind(kind)} onChange={setKind} options={[
+              { value: "auto", label: text.serialAuto }, { value: "usb", label: "USB" },
+              { value: "bluetooth", label: text.serialBluetooth },
+            ]} ariaLabel={text.serialType} disabled={busy} />
+          </Row>
+          <SerialPortRow onSelect={setSelectedPort} getNativeApi={getNativeApi} disabled={busy} />
+          <Row label={text.baudRate} disabled={busy}>
+            <Input value={String(baudRate ?? 115200)} ariaLabel={text.baudRate} disabled={busy}
+              onChange={(value) => numberInput(value, setBaudRate, 1200, 921600)} />
+          </Row>
+        </>
+      ) : (
+        <>
+          <Row label={text.deviceHost} disabled={busy}>
+            <Input value={host ?? ""} ariaLabel={text.deviceHost} placeholder="192.168.1.1" disabled={busy}
+              onChange={(value) => setHost(value)} />
+          </Row>
+          <Row label={text.devicePort} disabled={busy}>
+            <Input value={String(port ?? 8000)} ariaLabel={text.devicePort} disabled={busy}
+              onChange={(value) => numberInput(value, setPort, 1, 65535)} />
+          </Row>
+        </>
+      )}
+      <Row label={text.status} description={text.connHint}>
+        <Value>
           {endpoint} · {statusText}
-        </span>
-      </FieldRow>
-      <FieldRow label="" description={transport === "serial" ? text.motionHint : undefined}>
-        <Button onClick={test} disabled={busy || (transport === "serial" && !selectedPort)}>
+        </Value>
+      </Row>
+      <Row label="" description={transport === "serial" ? text.motionHint : undefined}>
+        <Btn tone="primary" onClick={test} disabled={busy || (transport === "serial" && !selectedPort)}>
           {busy ? text.testing : transport === "serial" ? text.serialMotionTest : text.testConn}
-        </Button>
-        {busy ? <Button variant="danger" disabled={testAbort.current?.signal.aborted === true}
+        </Btn>
+        {busy ? <Btn tone="danger" disabled={testAbort.current?.signal.aborted === true}
           onClick={() => {
             testAbort.current?.abort();
             setOutcome({ configuration, selectedPort, result: { ok: false, cancelled: true, detail: text.stopTest } });
           }}>
           {text.stopTest}
-        </Button> : null}
-      </FieldRow>
-    </Section>
+        </Btn> : null}
+      </Row>
+    </Card>
   );
 }
 
 function SettingsPage() {
   const text = useText();
   return (
-    <Panel>
+    <div>
+      {/* 页头：与游戏内界面同样的「小标题 + 大标题 + 强调线」节奏，尺寸按工具面板缩放 */}
+      <header style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, letterSpacing: 3, color: "rgba(127, 212, 200, 0.65)" }}>EXTENSION</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 2 }}>
+          <h1 style={{ margin: 0, fontSize: TYPE.title, fontWeight: 600, color: COLORS.text, letterSpacing: 1 }}>
+            OSR6 设备
+          </h1>
+          <span style={{ width: 40, height: 3, borderRadius: 2, background: COLORS.accent }} />
+        </div>
+      </header>
       <DeviceSection />
       <ImportSection />
-      <Section title={text.other}>
+      <Card title={text.other}>
         <FolderRow />
         <OverwriteRow />
-      </Section>
+      </Card>
+      {/* 剩下的引擎参数交给 Studio 的自动表单：列表型设置（轴）在那里编辑更顺手 */}
       <AutoSettings
         exclude={[
           "osr6.scriptImportFolder",
@@ -724,9 +756,12 @@ function SettingsPage() {
           "osr6.transport",
           "osr6.serialKind",
           "osr6.serialBackend",
+          "osr6.udpHost",
+          "osr6.udpPort",
+          "osr6.baudRate",
         ]}
       />
-    </Panel>
+    </div>
   );
 }
 

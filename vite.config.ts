@@ -79,6 +79,8 @@ function studioOnlyGuard(): Plugin {
 export default defineConfig(({ mode }) => {
   const studio = mode === "studio";
   return {
+    // 两个入口都内嵌驱动：编辑器设置页要能直接枚举系统串口做自动识别，
+    // 少这 1.2 MB 就得让作者先去预览里选设备，得不偿失。
     plugins: studio ? [react(), serialportBundlePlugin()] : [react(), studioOnlyGuard(), serialportBundlePlugin()],
     build: {
       lib: {

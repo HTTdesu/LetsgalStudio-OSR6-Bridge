@@ -26,8 +26,11 @@ export async function createSerialportBundle() {
   });
   const binaries = [];
   const prebuilds = path.join(bindingRoot, "prebuilds");
+  // Android 预编译用不上：游戏内宿主是 WebView，没有 Node，不走这条通道。
+  const skipPlatforms = new Set(["android"]);
   for (const directory of (await readdir(prebuilds)).sort()) {
     const [platform, architectures] = directory.split("-");
+    if (skipPlatforms.has(platform)) continue;
     for (const file of (await readdir(path.join(prebuilds, directory))).sort()) {
       if (!file.endsWith(".node")) continue;
       const bytes = await readFile(path.join(prebuilds, directory, file));
