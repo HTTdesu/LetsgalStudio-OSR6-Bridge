@@ -1,9 +1,7 @@
 /**
  * 设备引擎：维护目标值、做平滑、按固定频率把 TCode 帧发出去。
  *
- * 为什么是模块级单例：物理设备只有一台，同一个 App 里同时开两个连接只会互相
- * 抢控制权（扩展预览和主预览各开一个尤其糟糕）。所以连接状态放在模块作用域，
- * 方法每次调用拿到的实例不持有它（SDK 也明确要求状态不能放 this 上）。
+ * 每个运行周期独立持有引擎；连接操作串行执行，物理串口由传输层仲裁。
  */
 
 import {
@@ -19,6 +17,11 @@ import {
 import {
   createSerialTransport,
   createUdpTransport,
+  parseUsbId,
+  type SerialKind,
+  type SerialBackend,
+  type SerialApiLike,
+  type SerialPortLike,
   type Transport,
 } from "./transport";
 
@@ -30,6 +33,8 @@ export interface Osr6AxisSetting {
 
 export interface Osr6Settings {
   transport: "udp" | "serial";
+  serialKind?: SerialKind;
+  serialBackend?: SerialBackend;
   udpHost: string;
   udpPort: number;
   serialVendorId: string;
@@ -43,8 +48,13 @@ export interface Osr6Settings {
   axes: Osr6AxisSetting[];
 }
 
-/** 宿主注入的 Node 模块加载器。 */
-type DgramModule = unknown;
+export interface ConnectionDependencies {
+  serialApi?: SerialApiLike;
+  /** 只有 UDP 分支才调用，网页版串口绝不会触碰 Node。 */
+  loadDgram?: () => unknown;
+  selectedPort?: SerialPortLike;
+  signal?: AbortSignal;
+}
 
 export interface EngineSnapshot {
   connected: boolean;
@@ -53,13 +63,6 @@ export interface EngineSnapshot {
   targets: Array<{ axis: TCodeAxis; value: number }>;
   lastError: string | null;
   sentFrames: number;
-}
-
-function parseUsbId(raw: string): number | undefined {
-  const text = raw.trim();
-  if (text.length === 0) return undefined;
-  const value = /^0x/i.test(text) ? Number.parseInt(text, 16) : Number.parseInt(text, 10);
-  return Number.isFinite(value) ? value : undefined;
 }
 
 export class Osr6Engine {
@@ -73,6 +76,27 @@ export class Osr6Engine {
   private sentFrames = 0;
   private lastCommandAt = 0;
   private stopped = false;
+  private operations: Promise<void> = Promise.resolve();
+  private revision = 0;
+
+  constructor(private readonly onConnectionLost?: () => void) {}
+
+  private enqueue(action: () => Promise<void>): Promise<void> {
+    const result = this.operations.then(action);
+    this.operations = result.catch(() => undefined);
+    return result;
+  }
+
+  private connectionLost(transport: Transport, error: Error): void {
+    if (this.transport !== transport) return;
+    this.lastError = error.message;
+    this.transport = null;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.stopped = true;
+    this.onConnectionLost?.();
+    void this.enqueue(() => transport.close()).catch(() => undefined);
+  }
 
   get connected(): boolean {
     return this.transport !== null;
@@ -86,36 +110,59 @@ export class Osr6Engine {
     return this.lastError;
   }
 
-  async connect(
+  connect(
     settings: Osr6Settings,
-    dgram: DgramModule,
+    dependencies: ConnectionDependencies = {},
   ): Promise<void> {
-    if (this.transport) {
-      await this.disconnect();
-    }
-    this.settings = settings;
-    this.lastError = null;
-
-    const transport =
-      settings.transport === "serial"
-        ? await createSerialTransport({
+    const revision = ++this.revision;
+    return this.enqueue(async () => {
+      await this.disconnectInternal();
+      const cancelled = () => revision !== this.revision || dependencies.signal?.aborted;
+      const check = () => { if (cancelled()) throw new Error("连接已取消。"); };
+      check();
+      this.lastError = null;
+      let candidate: Transport | null = null;
+      const onError = (error: Error) => { if (candidate) this.connectionLost(candidate, error); };
+      try {
+        if (settings.transport === "serial") {
+          candidate = await createSerialTransport({
+            api: dependencies.serialApi,
             baudRate: settings.baudRate,
-            vendorId: parseUsbId(settings.serialVendorId),
-            productId: parseUsbId(settings.serialProductId),
+            kind: settings.serialKind,
+            vendorId: settings.serialKind === "bluetooth" ? undefined : parseUsbId(settings.serialVendorId),
+            productId: settings.serialKind === "bluetooth" ? undefined : parseUsbId(settings.serialProductId),
             portIndex: settings.serialPortIndex,
-          })
-        : createUdpTransport({
+            selectedPort: dependencies.selectedPort,
+            onError,
+          });
+        } else {
+          let dgram: unknown;
+          try {
+            dgram = dependencies.loadDgram?.();
+            if (!dgram) throw new Error("宿主没有 Node UDP 能力");
+          } catch {
+            throw new Error("当前环境不能直接发送 UDP。网页版请使用 USB / 蓝牙串口；WiFi UDP 需要桌面宿主或另装桥接程序。");
+          }
+          candidate = createUdpTransport({
             host: settings.udpHost.trim(),
             port: settings.udpPort,
             dgram,
+            onError,
           });
-
-    this.transport = transport;
-    this.resetAxisState();
-    this.stopped = false;
-
-    const hz = Math.min(60, Math.max(1, settings.updateHz));
-    this.timer = setInterval(() => this.tick(), Math.round(1000 / hz));
+        }
+        if (cancelled()) { await candidate.close(); check(); }
+        this.transport = candidate;
+        this.settings = settings;
+        this.resetAxisState();
+        // 连接成功本身不触发运动，等到第一条明确的位置命令再发送。
+        this.stopped = true;
+        const hz = Math.min(60, Math.max(1, settings.updateHz));
+        this.timer = setInterval(() => this.tick(), Math.round(1000 / hz));
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : String(error);
+        throw error;
+      }
+    });
   }
 
   private resetAxisState(): void {
@@ -131,7 +178,7 @@ export class Osr6Engine {
   private enabledAxes(): Osr6AxisSetting[] {
     const configured = this.settings?.axes ?? [];
     const usable = configured.filter((row) => isTCodeAxis(row.axis) && row.enabled);
-    if (usable.length > 0) return usable;
+    if (configured.length > 0) return usable;
     // 没配置就退回线性三轴 + 旋转三轴，保证开箱能出效果。
     return (["L0", "L1", "L2", "R0", "R1", "R2"] as TCodeAxis[]).map((axis) => ({
       axis,
@@ -192,13 +239,14 @@ export class Osr6Engine {
     if (!this.transport) {
       throw new Error("设备尚未连接：请先调用「连接 OSR6」。");
     }
+    const row = this.enabledAxes().find((entry) => entry.axis === axis);
+    if (!row) return;
     const target = clamp01(value);
     this.stopped = false;
     this.lastCommandAt = Date.now();
 
     if (rampMs > 0) {
-      const invert = this.enabledAxes().find((row) => row.axis === axis)?.invert ?? false;
-      const output = invert ? 1 - target : target;
+      const output = row.invert ? 1 - target : target;
       this.targets.set(axis, target);
       this.current.set(axis, target);
       this.lastSent.set(axis, Math.round(output * 9999));
@@ -215,9 +263,12 @@ export class Osr6Engine {
     if (!this.transport) {
       throw new Error("设备尚未连接：请先调用「连接 OSR6」。");
     }
+    const enabled = new Set(this.enabledAxes().map((row) => row.axis));
+    const usable = values.filter((item) => enabled.has(item.axis));
+    if (usable.length === 0) return;
     this.stopped = false;
     this.lastCommandAt = Date.now();
-    for (const item of values) {
+    for (const item of usable) {
       this.targets.set(item.axis, clamp01(item.value));
     }
   }
@@ -231,14 +282,14 @@ export class Osr6Engine {
    */
   setAxisExact(axis: TCodeAxis, value: number): void {
     if (!this.transport) return;
+    const row = this.enabledAxes().find((entry) => entry.axis === axis);
+    if (!row) return;
     const next = clamp01(value);
     this.stopped = false;
     this.lastCommandAt = Date.now();
     this.targets.set(axis, next);
     this.current.set(axis, next);
 
-    const row = this.enabledAxes().find((entry) => entry.axis === axis);
-    if (!row) return;
     const output = row.invert ? 1 - next : next;
     const quantized = Math.round(output * 9999);
     if (this.lastSent.get(axis) === quantized) return;
@@ -256,7 +307,7 @@ export class Osr6Engine {
     if (!this.transport) return;
     this.stopped = true;
     try {
-      this.transport.send(encodeLine([TCODE_STOP]));
+      this.transport.send(encodeLine([TCODE_STOP]), true);
       this.sentFrames += 1;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
@@ -274,7 +325,12 @@ export class Osr6Engine {
     }
   }
 
-  async disconnect(): Promise<void> {
+  disconnect(): Promise<void> {
+    ++this.revision;
+    return this.enqueue(() => this.disconnectInternal());
+  }
+
+  private async disconnectInternal(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -284,11 +340,13 @@ export class Osr6Engine {
     this.settings = null;
     if (transport) {
       try {
-        transport.send(encodeLine([TCODE_STOP]));
+        transport.send(encodeLine([TCODE_STOP]), true);
       } catch {
         // 关闭前尽力而为，不阻断清理。
       }
-      await transport.close().catch(() => undefined);
+      await transport.close().catch((error: unknown) => {
+        this.lastError = error instanceof Error ? error.message : String(error);
+      });
     }
     this.resetAxisState();
     this.stopped = false;

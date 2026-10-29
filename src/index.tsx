@@ -1,6 +1,11 @@
 import { Extension, extension, settings, type ExtensionContext } from "@avg-studio/sdk";
 import { decodeCarrierWav } from "./carrier";
-import { Osr6Engine, type Osr6AxisSetting, type Osr6Settings } from "./engine";
+import { type Osr6AxisSetting, type Osr6Settings } from "./engine";
+import { runtimeForSignal, type RuntimeState } from "./runtime-state";
+import { SerialDevicePicker, type SerialDevicePickerProps } from "./serial-device-picker";
+import { errorMessage, parseUsbId, serialBackend, serialKind, SerialSelectionRequiredError, type SerialBackend, type SerialOptions } from "./transport";
+import { NativeSerialApi } from "./native-serial";
+import { loadSerialPort, type SerialportNodeModules } from "./serialport-loader";
 import {
   describeFunscript,
   isInterpolationMode,
@@ -22,31 +27,10 @@ import { isTCodeAxis, TCODE_AXES, type TCodeAxis } from "./tcode";
  * 这就是"离开预览"的那个回调。它一触发就停止播放并让设备停住，避免预览关掉后
  * 设备还在动。
  */
-let boundSignal: AbortSignal | null = null;
-
-function bindRunLifecycle(ctx: { flow?: { signal?: AbortSignal } }): void {
+function getRuntime(ctx: { flow?: { signal?: AbortSignal } }): RuntimeState {
   const signal = ctx.flow?.signal;
-  if (!signal || signal === boundSignal) return;
-
-  if (boundSignal) {
-    // 旧信号不用手动解绑：它已经被取消，回调也不会再触发
-    boundSignal = null;
-  }
-
-  boundSignal = signal;
-  signal.addEventListener("abort", () => {
-    const wasPlaying = activePlaybacks.length > 0;
-    stopPlaybacks();
-    if (deviceWatch !== null) {
-      clearInterval(deviceWatch);
-      deviceWatch = null;
-    }
-    runtimeStarted = false;
-    getEngine().stop();
-    if (wasPlaying) {
-      console.log("[osr6] run aborted (left preview / reset), playback stopped");
-    }
-  });
+  if (!signal) throw new Error("当前 SDK 没有提供运行周期信号，请同步 SDK。");
+  return runtimeForSignal(signal);
 }
 
 /** 组里的一条脚本：驱动哪个轴、播什么、显示用的名字。 */
@@ -63,10 +47,8 @@ function percentToFraction(value: number | undefined, fallback = 0): number {
 }
 
 /** 每个轴的强度范围（0-1 区间），由「设置强度范围」写入；未设置的轴按 0-1 满幅。 */
-const strengthRanges = new Map<TCodeAxis, { min: number; max: number }>();
-
-function strengthFor(axis: TCodeAxis): { min: number; max: number } {
-  return strengthRanges.get(axis) ?? { min: 0, max: 1 };
+function strengthFor(runtime: RuntimeState, axis: TCodeAxis): { min: number; max: number } {
+  return runtime.strengthRanges.get(axis) ?? { min: 0, max: 1 };
 }
 
 /** 插值方式的取值顺序：参数 > 项目设置 > pchip。 */
@@ -88,15 +70,15 @@ function resolveInterpolation(
  * 发布版不打周期性日志（之前每 2 秒一条会刷满宿主控制台），只保留结束时的
  * 一行记录；真正的错误由各方法自己打印。
  */
-function startPlaybackWatchdog(): void {
-  if (playbackHeartbeat !== null) clearInterval(playbackHeartbeat);
-  playbackHeartbeat = setInterval(() => {
-    if (activePlaybacks.length === 0) {
-      stopPlaybacks();
+function startPlaybackWatchdog(runtime: RuntimeState): void {
+  if (runtime.playbackHeartbeat !== null) clearInterval(runtime.playbackHeartbeat);
+  runtime.playbackHeartbeat = setInterval(() => {
+    if (!runtime.engine.connected || runtime.activePlaybacks.length === 0) {
+      runtime.stopPlaybacks(!runtime.engine.connected);
       return;
     }
-    if (activePlaybacks.every((item) => !item.player.state().active)) {
-      stopPlaybacks();
+    if (runtime.activePlaybacks.every((item) => !item.player.state().active)) {
+      runtime.stopPlaybacks(false);
       console.log("[osr6] playback finished");
     }
   }, 1000);
@@ -113,7 +95,8 @@ function startGroup(
   params: GroupPlaybackParams,
   groupLabel: string,
 ): string {
-  const target = getEngine();
+  const runtime = getRuntime(ctx);
+  const target = runtime.engine;
   if (!target.connected) {
     throw new Error("设备尚未连接：请先调用「连接 OSR6」，再播放脚本。");
   }
@@ -129,12 +112,12 @@ function startGroup(
     seen.add(item.axis);
   }
 
-  bindRunLifecycle(ctx);
-
   const interpolation = resolveInterpolation(ctx, params.interpolation);
   const hz = readNumber(ctx, "playbackHz", 100, 10, 120);
 
-  stopPlaybacks();
+  runtime.clearTestTimers();
+  target.stop();
+  runtime.stopPlaybacks();
   for (const item of items) {
     const player = new FunscriptPlayer();
     player.play(
@@ -142,29 +125,29 @@ function startGroup(
       {
         axis: item.axis,
         loop: params.loop,
-        speed: playbackSpeed,
+        speed: runtime.playbackSpeed,
         startMs: params.startMs,
         invert: params.invert,
         interpolation,
       },
       // 强度重映射：每帧按该轴当前的范围取值，所以播放中改强度也会立即生效。
       (sinkAxis, value) => {
-        const range = strengthFor(sinkAxis);
+        const range = strengthFor(runtime, sinkAxis);
         target.setAxisExact(sinkAxis, range.min + (range.max - range.min) * value);
       },
       hz,
     );
-    activePlaybacks.push({ axis: item.axis, player, label: item.label });
+    runtime.activePlaybacks.push({ axis: item.axis, player, label: item.label });
   }
 
-  startPlaybackWatchdog();
+  startPlaybackWatchdog(runtime);
   console.log(
-    "[osr6] play group [" + activePlaybacks.map((item) => item.axis).join(",") + "] hz=" + hz,
+    "[osr6] play group [" + runtime.activePlaybacks.map((item) => item.axis).join(",") + "] hz=" + hz,
   );
 
   const summary = items
     .map((item) => {
-      const range = strengthFor(item.axis);
+      const range = strengthFor(runtime, item.axis);
       const label =
         Math.abs(range.min) < 1e-9 && Math.abs(range.max - 1) < 1e-9
           ? ""
@@ -175,52 +158,6 @@ function startGroup(
   return `正在播放 ${items.length} 条脚本${groupLabel}，插值 ${interpolation}${
     params.loop ? "（循环）" : ""
   }：${summary}`;
-}
-
-/**
- * 设备引擎只应该有一份：物理设备只有一台，两个连接会互相抢控制权。
- * SDK 也要求状态不能挂在实例上（方法每次调用拿到的实例不共享字段），
- * 所以放在模块作用域。
- */
-let engine: Osr6Engine | null = null;
-
-function getEngine(): Osr6Engine {
-  if (!engine) engine = new Osr6Engine();
-  return engine;
-}
-
-/**
- * 当前正在播放的脚本组：每个轴一个播放器，同时开播。
- *
- * 之前是单播放器（一次只能驱动一个轴），现在改成组：单脚本就是长度 1 的数组。
- * 组内的播放器共享开始时刻，各自把自己的位置写到自己那个轴上。
- */
-interface ActivePlayback {
-  axis: TCodeAxis;
-  player: FunscriptPlayer;
-  label: string;
-}
-
-let activePlaybacks: ActivePlayback[] = [];
-
-/** 全局播放倍速：由「设置播放速度」改，播放中立即生效并延续到之后的播放。 */
-let playbackSpeed = 1;
-
-/** 监听玩家改设备地址/端口：变了就用新地址重连。 */
-let deviceWatch: ReturnType<typeof setInterval> | null = null;
-
-/** 播放心跳（每 2 秒打一条日志，用于判断播放循环有没有被打断）。 */
-let playbackHeartbeat: ReturnType<typeof setInterval> | null = null;
-
-function stopPlaybacks(): void {
-  for (const item of activePlaybacks) {
-    item.player.stop();
-  }
-  activePlaybacks = [];
-  if (playbackHeartbeat !== null) {
-    clearInterval(playbackHeartbeat);
-    playbackHeartbeat = null;
-  }
 }
 
 /** 本扩展的模块 id —— 设置的完整名是「模块 id.字段名」。 */
@@ -296,6 +233,8 @@ function readSettings(ctx: {
         : Math.round(readNumber(ctx, "udpPort", 8000, 1, 65535)),
     serialVendorId: readString(ctx, "serialVendorId", ""),
     serialProductId: readString(ctx, "serialProductId", ""),
+    serialKind: serialKind(ctx.variables?.get("OSR6串口类型") || readRaw(ctx, "serialKind")),
+    serialBackend: serialBackend(ctx.variables?.get("OSR6串口访问方式") || readRaw(ctx, "serialBackend")),
     serialPortIndex:
       playerSerialIndex >= 0 && playerSerialIndex <= 9
         ? Math.round(playerSerialIndex)
@@ -374,14 +313,15 @@ function readDeviceTransport(ctx: {
 function scriptSources(ctx: {
   variables: { get(name: string): unknown };
   asset: { resolve(uri: string): { url: string } };
-}): ScriptSources {
+}, signal?: AbortSignal): ScriptSources {
   return {
     async readAsset(ref: string): Promise<string> {
       const { url } = ctx.asset.resolve(ref);
       let response: Response;
       try {
-        response = await fetch(url);
+        response = await fetch(url, { signal });
       } catch (error) {
+        if (signal?.aborted) throw new Error("脚本播放已取消。");
         const reason = error instanceof Error ? error.message : String(error);
         throw new Error(`无法访问素材地址（${reason}）`);
       }
@@ -450,78 +390,107 @@ interface GroupPlaybackParams {
   interpolation: string;
 }
 
-/** 按当前设置重连一次，返回端点。玩家改完配置后调用。 */
-async function reconnectNow(ctx: ExtensionContext): Promise<string> {
-  const engine = getEngine();
-  if (engine.connected) await engine.disconnect();
-  const config = readSettings(ctx);
-  await engine.connect(config, ctx.native.node.require("node:dgram"));
-  return engine.endpoint ?? "";
+const SERIAL_PICKER_ID = "osr6-serial-picker";
+
+function connectionKey(config: Osr6Settings): string {
+  return JSON.stringify([config.transport, config.udpHost, config.udpPort, config.serialKind, config.serialBackend,
+    config.serialVendorId, config.serialProductId, config.serialPortIndex, config.baudRate]);
 }
-/** 运行时是否已经初始化（幂等保护；运行周期结束时重置）。 */
-let runtimeStarted = false;
 
-/**
- * 运行时初始化：回填玩家变量、自动连接、开始监听设备设置变化。
- *
- * 必须能被重复调用而不产生副作用——宿主可能在 onRegister / onInit 之间
- * 只调用其中一个，而运行周期重置后又要重新初始化。
- */
-function startRuntime(ctx: ExtensionContext): void {
-  if (runtimeStarted) return;
-  runtimeStarted = true;
-  console.log("[osr6] runtime start");
+function serialOptions(config: Osr6Settings): SerialOptions {
+  return {
+    baudRate: config.baudRate, kind: config.serialKind,
+    vendorId: config.serialKind === "bluetooth" ? undefined : parseUsbId(config.serialVendorId),
+    productId: config.serialKind === "bluetooth" ? undefined : parseUsbId(config.serialProductId),
+  };
+}
 
-  // 把实际生效的地址/端口回填进变量，设置界面才不会显示空白。
-  const initial = readSettings(ctx);
-  if (readDeviceHost(ctx).length === 0) {
-    ctx.variables.set(DEVICE_HOST_VARIABLE, initial.udpHost);
-  }
-  if (readDevicePort(ctx) === 0) {
-    ctx.variables.set(DEVICE_PORT_VARIABLE, initial.udpPort);
-  }
-
-  const target = getEngine();
-  if (!target.connected && readRaw(ctx, "autoConnect") !== false) {
-    void target
-      .connect(readSettings(ctx), ctx.native.node.require("node:dgram"))
-      .then(() => console.log("[osr6] auto-connected " + (target.endpoint ?? "?")))
-      .catch((error) =>
-        console.log(
-          "[osr6] auto-connect failed: " +
-            (error instanceof Error ? error.message : String(error)),
-        ),
-      );
-  }
-
-  // 玩家在设置界面改完地址/方式后，界面只写变量；这里轮询发现变化并重连。
-  let lastHost = readDeviceHost(ctx);
-  let lastPort = readDevicePort(ctx);
-  let lastTransport = readDeviceTransport(ctx);
-  if (deviceWatch !== null) clearInterval(deviceWatch);
-  deviceWatch = setInterval(() => {
-    const host = readDeviceHost(ctx);
-    const port = readDevicePort(ctx);
-    const transport = readDeviceTransport(ctx);
-    if (host === lastHost && port === lastPort && transport === lastTransport) return;
-    lastHost = host;
-    lastPort = port;
-    lastTransport = transport;
-    const mode = readSettings(ctx).transport;
-    if (mode === "udp" && host.length === 0) return;
-    void (async () => {
+function nativeSerialApi(ctx: ExtensionContext): NativeSerialApi {
+  const runtime = getRuntime(ctx);
+  if (!runtime.nativeSerial) {
+    runtime.nativeSerial = new NativeSerialApi(() => {
       try {
-        const engine = getEngine();
-        if (engine.connected) await engine.disconnect();
-        await engine.connect(readSettings(ctx), ctx.native.node.require("node:dgram"));
-        console.log("[osr6] reconnected to " + (engine.endpoint ?? "?"));
+        return loadSerialPort({
+          process: ctx.native.node.require<SerialportNodeModules["process"]>("node:process"),
+          buffer: ctx.native.node.require<SerialportNodeModules["buffer"]>("node:buffer"),
+          fs: ctx.native.node.require<SerialportNodeModules["fs"]>("node:fs"),
+          os: ctx.native.node.require<SerialportNodeModules["os"]>("node:os"),
+          path: ctx.native.node.require<SerialportNodeModules["path"]>("node:path"),
+          crypto: ctx.native.node.require<SerialportNodeModules["crypto"]>("node:crypto"),
+          zlib: ctx.native.node.require<SerialportNodeModules["zlib"]>("node:zlib"),
+          stream: ctx.native.node.require<SerialportNodeModules["stream"]>("node:stream"),
+          events: ctx.native.node.require<SerialportNodeModules["events"]>("node:events"),
+          util: ctx.native.node.require<SerialportNodeModules["util"]>("node:util"),
+          tty: ctx.native.node.require<SerialportNodeModules["tty"]>("node:tty"),
+          child_process: ctx.native.node.require<SerialportNodeModules["child_process"]>("node:child_process"),
+        });
       } catch (error) {
-        console.log(
-          "[osr6] reconnect failed: " +
-            (error instanceof Error ? error.message : String(error)),
-        );
+        throw new Error("桌面原生串口不可用：" + errorMessage(error) + "。此通道需要桌面宿主开放 Node 原生能力，网页版请使用浏览器授权。");
       }
-    })();
+    });
+  }
+  return runtime.nativeSerial;
+}
+
+/** 所有连接入口共用；自动连接只复用授权，绝不弹设备授权窗口。 */
+async function reconnectNow(ctx: ExtensionContext): Promise<string> {
+  const runtime = getRuntime(ctx);
+  if (runtime.signal.aborted) throw new Error("运行已结束，连接已取消。");
+  runtime.stopPlaybacks();
+  runtime.clearTestTimers();
+  const config = readSettings(ctx);
+  runtime.connectionKey = connectionKey(config);
+  await runtime.engine.connect(config, {
+    loadDgram: () => ctx.native.node.require("node:dgram"),
+    selectedPort: config.transport === "serial" ? runtime.selectedPort : undefined,
+    serialApi: config.transport === "serial" && config.serialBackend === "native" ? nativeSerialApi(ctx) : undefined,
+    signal: runtime.signal,
+  });
+  return runtime.engine.endpoint ?? "";
+}
+
+async function connectFromUser(ctx: ExtensionContext): Promise<string> {
+  try {
+    return await reconnectNow(ctx);
+  } catch (error) {
+    if (error instanceof SerialSelectionRequiredError && !getRuntime(ctx).signal.aborted) {
+      await showSerialPicker(ctx);
+      return getRuntime(ctx).engine.endpoint ?? error.message;
+    }
+    throw error;
+  }
+}
+
+async function showSerialPicker(ctx: ExtensionContext): Promise<void> {
+  const runtime = getRuntime(ctx);
+  runtime.stopPlaybacks();
+  runtime.clearTestTimers();
+  runtime.engine.stop();
+  await ctx.ui.show(SERIAL_PICKER_ID, {}, { modal: true });
+}
+
+function startRuntime(ctx: ExtensionContext): void {
+  const runtime = getRuntime(ctx);
+  if (runtime.started || runtime.signal.aborted) return;
+  runtime.started = true;
+  const initial = readSettings(ctx);
+  if (readDeviceHost(ctx).length === 0) ctx.variables.set(DEVICE_HOST_VARIABLE, initial.udpHost);
+  if (readDevicePort(ctx) === 0) ctx.variables.set(DEVICE_PORT_VARIABLE, initial.udpPort);
+  if (readDeviceTransport(ctx) === "") ctx.variables.set(DEVICE_TRANSPORT_VARIABLE, initial.transport);
+  runtime.connectionKey = connectionKey(readSettings(ctx));
+  if (!runtime.engine.connected && readRaw(ctx, "autoConnect") !== false) {
+    void reconnectNow(ctx).catch((error: unknown) => {
+      if (!runtime.signal.aborted) console.log("[osr6] auto-connect: " + errorMessage(error));
+    });
+  }
+  runtime.deviceWatch = setInterval(() => {
+    const next = connectionKey(readSettings(ctx));
+    if (next === runtime.connectionKey) return;
+    // 序号或筛选变化后丢弃旧对象，要求唯一候选或重新选择。
+    runtime.selectedPort = undefined;
+    void reconnectNow(ctx).catch((error: unknown) => {
+      if (!runtime.signal.aborted) console.log("[osr6] reconnect: " + errorMessage(error));
+    });
   }, 2000);
 }
 @extension({ id: "osr6", label: "OSR6 联动" })
@@ -529,11 +498,23 @@ class Osr6Extension extends Extension {
   static settings = settings((s) => ({
     transport: s
       .enum("连接方式", ["udp", "serial"] as const)
-      .labels({ udp: "WiFi / UDP", serial: "USB 串口" })
+      .labels({ udp: "WiFi / UDP", serial: "USB / 蓝牙串口" })
       .default("udp")
       .describe(
-        "UDP：设备连上同一个 WiFi 后监听端口。串口：USB 直连，走 Web Serial，需要宿主允许访问串口。",
+        "UDP 仅桌面宿主可直连；USB 和传统蓝牙 SPP 支持桌面原生串口或网页浏览器授权。BLE 不属于串口。",
       ),
+    serialKind: s
+      .enum("串口类型", ["auto", "usb", "bluetooth"] as const)
+      .labels({ auto: "自动识别", usb: "USB", bluetooth: "传统蓝牙 SPP" })
+      .default("auto")
+      .describe("蓝牙需先在系统里配对；不支持仅提供 BLE 的设备。玩家可在设备选择面板覆盖。")
+      .enabledWhen("transport", "serial"),
+    serialBackend: s
+      .enum("串口访问方式", ["web", "native", "windows"] as const)
+      .labels({ web: "浏览器授权", native: "桌面原生串口", windows: "桌面原生串口（旧设置）" })
+      .default("web")
+      .describe("桌面原生串口使用 serialport，支持 Windows、macOS、Linux 的系统串口；网页版使用浏览器授权。旧 windows 设置自动兼容。")
+      .enabledWhen("transport", "serial"),
     udpHost: s
       .string("设备 IPv4 地址")
       .default("192.168.1.1")
@@ -548,7 +529,7 @@ class Osr6Extension extends Extension {
     serialVendorId: s
       .string("串口 USB 厂商 ID（可选）")
       .default("")
-      .describe("形如 0x1a86 或 6790。留空则使用已授权端口，或让你在弹窗里选择。")
+      .describe("形如 0x1a86 或 6790。仅筛选 USB；蓝牙模式忽略。多个候选必须由玩家选择。")
       .enabledWhen("transport", "serial"),
     serialProductId: s
       .string("串口 USB 产品 ID（可选）")
@@ -559,7 +540,7 @@ class Osr6Extension extends Extension {
       .default(0)
       .range(0, 9)
       .describe(
-        "已授权串口列表里的第几个（从 0 开始）。编辑器「设备」面板会列出这个列表，点一下即可写入。",
+        "已授权完整列表的序号（从 0 开始），用于编辑器测试与兼容旧配置；游戏中多个候选必须手动选设备。",
       )
       .enabledWhen("transport", "serial"),
     baudRate: s
@@ -629,7 +610,7 @@ class Osr6Extension extends Extension {
       .boolean("启动时自动连接")
       .default(true)
       .describe(
-        "引擎启动（含预览重载）时自动按上面的配置连一次设备；关掉就只能靠剧本里的「连接 OSR6」。",
+        "启动时尝试连接一次。串口仅在候选唯一且已授权时自动连接；首次授权和多设备选择请点击「选择串口设备」。",
       ),
   }));
 
@@ -641,7 +622,6 @@ class Osr6Extension extends Extension {
    * `startRuntime` 内部有幂等保护，重复调用无副作用。
    */
   static async onRegister(ctx: ExtensionContext) {
-    bindRunLifecycle(ctx);
     void startRuntime(ctx);
   }
 
@@ -653,7 +633,7 @@ class Osr6Extension extends Extension {
   static setTransport = this.method({
     title: "设置连接方式",
     description:
-      "玩家选择用 WiFi（UDP）还是 USB 串口连接。写入玩家档案并立即用新方式重连。",
+      "玩家选择 WiFi（UDP）或 USB / 传统蓝牙串口；串口打开设备选择面板。",
     returns: { type: "string", label: "当前连接" },
     schema: {
       mode: {
@@ -661,7 +641,7 @@ class Osr6Extension extends Extension {
         label: "连接方式",
         options: [
           { value: "udp", label: "WiFi / UDP" },
-          { value: "serial", label: "USB 串口" },
+          { value: "serial", label: "USB / 蓝牙串口" },
         ],
         default: "udp",
       },
@@ -669,9 +649,18 @@ class Osr6Extension extends Extension {
     async run(ctx, params) {
       const mode = params.mode === "serial" ? "serial" : "udp";
       ctx.variables.set(DEVICE_TRANSPORT_VARIABLE, mode);
-      const label = mode === "serial" ? "USB 串口" : "WiFi / UDP";
+      const label = mode === "serial" ? "USB / 蓝牙串口" : "WiFi / UDP";
+      if (mode === "serial") {
+        const runtime = getRuntime(ctx);
+        runtime.connectionKey = connectionKey(readSettings(ctx));
+        runtime.stopPlaybacks();
+        runtime.clearTestTimers();
+        await runtime.engine.disconnect();
+        await showSerialPicker(ctx);
+        return "请选择 USB 或传统蓝牙串口设备。";
+      }
       try {
-        const endpoint = await reconnectNow(ctx);
+        const endpoint = await connectFromUser(ctx);
         console.log("[osr6] transport=" + mode + " endpoint=" + endpoint);
         return label + "：" + endpoint;
       } catch (error) {
@@ -681,6 +670,14 @@ class Osr6Extension extends Extension {
         console.log("[osr6] transport=" + mode + " connect failed: " + reason);
         return label + "：连接失败（" + reason + "）";
       }
+    },
+  });
+
+  static chooseSerialDevice = this.method({
+    title: "选择串口设备",
+    description: "打开 USB / 传统蓝牙 SPP 设备选择面板，适用于桌面和支持 Web Serial 的安全网页。",
+    async run(ctx) {
+      await showSerialPicker(ctx);
     },
   });
 
@@ -712,7 +709,7 @@ class Osr6Extension extends Extension {
       const port = Math.round(params.port ?? 8000);
       ctx.variables.set(DEVICE_HOST_VARIABLE, host);
       ctx.variables.set(DEVICE_PORT_VARIABLE, String(port));
-      const endpoint = await reconnectNow(ctx);
+      const endpoint = await connectFromUser(ctx);
       console.log("[osr6] device " + host + ":" + port + " endpoint=" + endpoint);
       return endpoint;
     },
@@ -722,37 +719,35 @@ class Osr6Extension extends Extension {
     description: "按项目设置打开 UDP 或串口连接，并启动发送循环。",
     returns: { type: "string", label: "连接端点" },
     async run(ctx) {
-      const target = getEngine();
+      const target = getRuntime(ctx).engine;
       const config = readSettings(ctx);
-      await target.connect(config, ctx.native.node.require("node:dgram"));
-      console.log(
-        "[osr6] connected " + (target.endpoint ?? "?") + " via " + config.transport,
-      );
-      return target.endpoint ?? "已连接";
+      const endpoint = await connectFromUser(ctx);
+      if (target.connected) console.log("[osr6] connected " + target.endpoint + " via " + config.transport);
+      return endpoint;
     },
   });
 
   static testDevice = this.method({
     title: "测试设备连接",
     description:
-      "按当前设置（含玩家改过的地址）连接一次，并让设备做一次小幅动作（中位 → 62% → 中位）。",
+      "按当前设置连接，并让设备做一次小幅动作（中位 → 68% → 中位）。串口未授权时先打开选择面板。",
     returns: { type: "string", label: "测试结果" },
     async run(ctx) {
-      const target = getEngine();
-      if (target.connected) await target.disconnect();
-      await target.connect(readSettings(ctx), ctx.native.node.require("node:dgram"));
+      const runtime = getRuntime(ctx);
+      const target = runtime.engine;
+      const endpoint = await connectFromUser(ctx);
+      if (!target.connected) return endpoint;
 
       // 三个动作必须错开发：同一 tick 里连着发，后一条会直接覆盖前一条的
       // 目标值（第一条的爬升还没开始就被换掉），设备看起来完全没动。
       target.setAxisExact("L0", 0.5);
-      const timers: Array<ReturnType<typeof setTimeout>> = [];
-      timers.push(setTimeout(() => target.setAxis("L0", 0.68, 350), 150));
-      timers.push(setTimeout(() => target.setAxis("L0", 0.5, 350), 750));
-      timers.push(
-        setTimeout(() => {
-          for (const timer of timers) clearTimeout(timer);
-        }, 1500),
-      );
+      for (const [ms, value] of [[150, 0.68], [750, 0.5]]) {
+        const timer = setTimeout(() => {
+          runtime.testTimers.delete(timer);
+          if (target.connected && !runtime.signal.aborted) target.setAxis("L0", value, 350);
+        }, ms);
+        runtime.testTimers.add(timer);
+      }
 
       console.log("[osr6] test-device " + (target.endpoint ?? "?"));
       return "已连接并发送测试动作：" + (target.endpoint ?? "");
@@ -761,26 +756,30 @@ class Osr6Extension extends Extension {
   static disconnect = this.method({
     title: "断开 OSR6",
     description: "先停止脚本播放并发送 DSTOP，再关闭传输通道。",
-    async run() {
-      stopPlaybacks();
-      await getEngine().disconnect();
+    async run(ctx) {
+      const runtime = getRuntime(ctx);
+      runtime.stopPlaybacks();
+      runtime.clearTestTimers();
+      await runtime.engine.disconnect();
     },
   });
 
   static stop = this.method({
     title: "急停",
     description: "立即停止脚本播放并发送 DSTOP，之后不再发送位置帧。",
-    run() {
-      stopPlaybacks();
-      getEngine().stop();
+    run(ctx) {
+      const runtime = getRuntime(ctx);
+      runtime.stopPlaybacks();
+      runtime.clearTestTimers();
+      runtime.engine.stop();
     },
   });
 
   static recenter = this.method({
     title: "回到中位",
     description: "线性/旋转轴回到 0.5，振动与辅助轴回到 0。",
-    run() {
-      getEngine().recenter();
+    run(ctx) {
+      getRuntime(ctx).engine.recenter();
     },
   });
 
@@ -812,9 +811,9 @@ class Osr6Extension extends Extension {
         description: "大于 0 时由设备自己做时间插值，适合单次平滑移动。",
       },
     },
-    run(_ctx, params) {
+    run(ctx, params) {
       const axis: TCodeAxis = isTCodeAxis(params.axis) ? params.axis : "L0";
-      getEngine().setAxis(axis, params.value, params.rampMs);
+      getRuntime(ctx).engine.setAxis(axis, params.value, params.rampMs);
     },
   });
 
@@ -822,8 +821,8 @@ class Osr6Extension extends Extension {
     title: "读取连接状态",
     description: "返回连接状态、端点、各轴目标值和已发送帧数的 JSON。",
     returns: { type: "string", label: "状态 JSON" },
-    run() {
-      return JSON.stringify(getEngine().snapshot());
+    run(ctx) {
+      return JSON.stringify(getRuntime(ctx).engine.snapshot());
     },
   });
 
@@ -872,30 +871,47 @@ class Osr6Extension extends Extension {
       ...scriptPlaybackCommonFields(),
     },
     async run(ctx, params) {
-      const rows = params.scripts ?? [];
-      if (rows.length === 0) {
-        throw new Error("脚本组为空：至少添加一条。");
-      }
-
-      const items: GroupItem[] = [];
-      for (const row of rows) {
-        if (!row.asset) {
-          throw new Error("有一条脚本没有选择素材。");
+      const signal = ctx.flow.signal;
+      const runtime = getRuntime(ctx);
+      const request = runtime.beginPlaybackRequest();
+      const check = () => {
+        if (request.aborted || signal.aborted || ctx.flow.signal !== signal) throw new Error("脚本播放已取消。");
+      };
+      try {
+        check();
+        const rows = params.scripts ?? [];
+        if (rows.length === 0) {
+          throw new Error("脚本组为空：至少添加一条。");
         }
-        const text = await scriptSources(ctx).readAsset?.(row.asset);
-        if (text === undefined) {
-          throw new Error("当前宿主没有提供素材读取能力。");
-        }
-        const script = parseFunscript(text);
-        const axis: TCodeAxis = isTCodeAxis(row.axis) ? row.axis : "L0";
-        console.log(
-          "[osr6] asset " + row.asset + " -> " + script.actions.length + " actions / " +
-            script.durationMs + "ms",
-        );
-        items.push({ axis, script, label: row.asset });
-      }
 
-      return startGroup(ctx, items, params, "");
+        const items: GroupItem[] = [];
+        for (const row of rows) {
+          if (!row.asset) {
+            throw new Error("有一条脚本没有选择素材。");
+          }
+          const text = await scriptSources(ctx, request).readAsset?.(row.asset);
+          check();
+          if (text === undefined) {
+            throw new Error("当前宿主没有提供素材读取能力。");
+          }
+          const script = parseFunscript(text);
+          const axis: TCodeAxis = isTCodeAxis(row.axis) ? row.axis : "L0";
+          console.log(
+            "[osr6] asset " + row.asset + " -> " + script.actions.length + " actions / " +
+              script.durationMs + "ms",
+          );
+          items.push({ axis, script, label: row.asset });
+        }
+
+        check();
+        runtime.finishPlaybackRequest(request);
+        return startGroup(ctx, items, params, "");
+      } catch (error) {
+        check();
+        throw error;
+      } finally {
+        runtime.finishPlaybackRequest(request);
+      }
     },
   });
 
@@ -915,10 +931,12 @@ class Osr6Extension extends Extension {
         description: "1 = 原速，2 = 两倍速，0.5 = 半速。",
       },
     },
-    run(_ctx, params) {
+    run(ctx, params) {
       const raw = Number(params.speed);
       const next = Math.min(4, Math.max(0.1, Number.isFinite(raw) ? raw : 1));
-      playbackSpeed = next;
+      const runtime = getRuntime(ctx);
+      runtime.playbackSpeed = next;
+      const activePlaybacks = runtime.activePlaybacks;
       for (const item of activePlaybacks) item.player.setSpeed(next);
       console.log(
         "[osr6] speed " + next + (activePlaybacks.length > 0 ? " (applied to " + activePlaybacks.length + ")" : " (stored)"),
@@ -962,18 +980,24 @@ class Osr6Extension extends Extension {
         },
       },
     },
-    run(_ctx, params) {
+    run(ctx, params) {
+      const { strengthRanges, activePlaybacks } = getRuntime(ctx);
       const rows = params.ranges ?? [];
       if (rows.length === 0) {
         throw new Error("强度范围为空：至少添加一行。");
       }
       const applied: string[] = [];
+      const changed = new Set<TCodeAxis>();
       for (const row of rows) {
         const axis: TCodeAxis = isTCodeAxis(row.axis) ? row.axis : "L0";
         const min = percentToFraction(row.min, 0);
         const max = percentToFraction(row.max, 100);
         strengthRanges.set(axis, { min, max });
+        changed.add(axis);
         applied.push(axis + " " + Math.round(min * 100) + "–" + Math.round(max * 100) + "%");
+      }
+      for (const item of activePlaybacks) {
+        if (changed.has(item.axis)) item.player.refreshOutput();
       }
       console.log("[osr6] strength " + applied.join(", "));
       return "已设置：" + applied.join("，");
@@ -983,7 +1007,8 @@ class Osr6Extension extends Extension {
   static pauseScript = this.method({
     title: "暂停脚本",
     description: "暂停整组脚本，设备停在当前位置。",
-    run() {
+    run(ctx) {
+      const { activePlaybacks } = getRuntime(ctx);
       for (const item of activePlaybacks) item.player.pause();
     },
   });
@@ -992,6 +1017,7 @@ class Osr6Extension extends Extension {
     title: "继续脚本",
     description: "从暂停处继续整组脚本。",
     run(ctx) {
+      const { activePlaybacks } = getRuntime(ctx);
       const hz = readNumber(ctx, "playbackHz", 100, 10, 120);
       for (const item of activePlaybacks) item.player.resume(hz);
     },
@@ -1011,7 +1037,8 @@ class Osr6Extension extends Extension {
         default: 0,
       },
     },
-    run(_ctx, params) {
+    run(ctx, params) {
+      const { activePlaybacks } = getRuntime(ctx);
       if (activePlaybacks.length === 0) return "当前没有在播放";
       let resolved = 0;
       for (const item of activePlaybacks) resolved = item.player.seek(params.ms);
@@ -1022,9 +1049,10 @@ class Osr6Extension extends Extension {
   static stopScript = this.method({
     title: "停止脚本",
     description: "停止整组脚本并回到中位。",
-    run() {
-      stopPlaybacks();
-      getEngine().recenter();
+    run(ctx) {
+      const runtime = getRuntime(ctx);
+      runtime.stopPlaybacks();
+      runtime.engine.recenter();
     },
   });
 
@@ -1032,9 +1060,10 @@ class Osr6Extension extends Extension {
     title: "读取脚本播放状态",
     description: "返回每条脚本的轴、进度、循环与已下发帧数的 JSON。",
     returns: { type: "string", label: "状态 JSON" },
-    run() {
+    run(ctx) {
+      const { engine, activePlaybacks } = getRuntime(ctx);
       return JSON.stringify({
-        device: getEngine().connected,
+        device: engine.connected,
         playing: activePlaybacks.length,
         playbacks: activePlaybacks.map((item) => ({ ...item.player.state(), axis: item.axis })),
       });
@@ -1043,3 +1072,39 @@ class Osr6Extension extends Extension {
 }
 
 export default Osr6Extension;
+
+@extension({ id: SERIAL_PICKER_ID, label: "串口设备选择", hidden: true })
+export class SerialDevicePickerExtension extends Extension<SerialDevicePickerProps> {
+  render() {
+    const ctx = this.context;
+    const runtime = getRuntime(ctx);
+    return {
+      component: SerialDevicePicker,
+      props: {
+        signal: runtime.signal,
+        initialBackend: readSettings(ctx).serialBackend,
+        getOptions: (backend?: SerialBackend) => ({
+          ...serialOptions(readSettings(ctx)),
+          api: backend === "native" ? nativeSerialApi(ctx) : undefined,
+        }),
+        snapshot: () => runtime.engine.snapshot(),
+        connect: async (port, kind, baudRate, backend = readSettings(ctx).serialBackend) => {
+          if (runtime.signal.aborted) throw new Error("运行已结束。");
+          if (!Number.isInteger(baudRate) || baudRate < 1200 || baudRate > 921600) throw new Error("波特率必须是 1200–921600 之间的整数。");
+          ctx.variables.set(DEVICE_TRANSPORT_VARIABLE, "serial");
+          ctx.variables.set("OSR6串口类型", kind);
+          ctx.variables.set("OSR6波特率", String(baudRate));
+          ctx.variables.set("OSR6串口访问方式", backend ?? "web");
+          runtime.selectedPort = port;
+          await reconnectNow(ctx);
+        },
+        disconnect: async () => {
+          runtime.stopPlaybacks(); runtime.clearTestTimers();
+          await runtime.engine.disconnect();
+        },
+        stop: () => { runtime.stopPlaybacks(); runtime.clearTestTimers(); runtime.engine.stop(); },
+        close: async () => { await ctx.ui.hide(SERIAL_PICKER_ID); },
+      } satisfies SerialDevicePickerProps,
+    };
+  }
+}

@@ -3,15 +3,13 @@
  *
  * 两个功能：
  * 1. 「导入 funscript」：选 .funscript → 打包成 WAV 载波 → 写进项目 assets/。
- * 2. 「设备连接」：显示 OSR6 的连接状态，并提供连接 / 断开 / 急停 / 试动。
+ * 2. 「设备连接」：配置 UDP / USB / 传统蓝牙串口，并短暂测试设备。
  *
  * 几点说明：
  * - Studio 的素材管线不接受 .funscript，编辑器页面也没有「导入素材」的接口，
  *   所以导入直接把文件写到 `<项目目录>/assets/<子目录>/`，创作者刷新资产即可看到。
- * - 写入和连接都用宿主窗口里的 Node `require`。官方文档不建议在编辑期入口用
- *   Node（工坊审核会把扩展标记为特权、需要人工过审），这是本地扩展的取舍。
- * - 编辑期的连接是**独立的一条**：它跑在 Studio 窗口里，和游戏运行时（预览/游戏）
- *   自己的连接互不共享。同一台设备同时只建议开一个，否则两边会轮流写位置。
+ * - 本地设备测试按用户要求复用宿主 Node；浏览器串口仍使用 Web Serial。
+ * - 串口测试临时打开并释放端口，不建立常驻连接，请先断开预览设备。
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,6 +18,7 @@ import {
   FieldRow,
   Panel,
   Section,
+  Select,
   Segmented,
   Switch,
   TextInput,
@@ -29,6 +28,14 @@ import {
 } from "@avg-studio/studio-ui";
 import { encodeCarrierWav } from "./carrier";
 import { parseFunscript } from "./funscript";
+import { testSerialDevice } from "./serial-probe";
+import { probeUdpDevice, type UdpProbeModule } from "./udp-probe";
+import { createStudioSerialApi } from "./studio-serial";
+import type { NativeSerialApi } from "./native-serial";
+import {
+  errorMessage, listSerialDevices, parseUsbId, requestSerialDevice, serialBackend, serialKind, serialRequestErrorMessage,
+  serialUnavailableReason, describeSerialPort, type SerialApiLike, type SerialOptions, type SerialPortLike,
+} from "./transport";
 
 interface Text {
   importTitle: string;
@@ -66,6 +73,24 @@ interface Text {
   portNoApi: string;
   portInactive: string;
   grantFailed: string;
+  serialType: string;
+  serialAuto: string;
+  serialBluetooth: string;
+  bluetoothHint: string;
+  serialOk: string;
+  serialBackend: string;
+  browserBackend: string;
+  nativeBackend: string;
+  nativeHint: string;
+  choosePort: string;
+  loadingPorts: string;
+  refreshSystemPorts: string;
+  nativePortsEmpty: string;
+  serialMotionTest: string;
+  serialMotionDone: string;
+  motionHint: string;
+  stopTest: string;
+  testStopped: string;
 }
 
 const TEXT: Record<string, Text> = {
@@ -86,10 +111,10 @@ const TEXT: Record<string, Text> = {
     connTitle: "设备连接",
     mode: "连接方式",
     modeUdp: "WiFi / UDP",
-    modeSerial: "USB 串口",
+    modeSerial: "USB / 蓝牙串口",
     status: "状态",
     connHint:
-      "这里只保存参数，不会占用设备；真正的连接由预览/游戏运行时自己建立。测试按钮只发一条 D0 询问设备身份，不建立会话。",
+      "测试会发送小幅动作并回到中位；串口测试结束后释放端口。请先断开预览中的同一设备。",
     noNode: "宿主没有提供 Node 模块加载器，无法测试。",
     testConn: "测试设备",
     testing: "测试中…",
@@ -97,15 +122,33 @@ const TEXT: Record<string, Text> = {
     testReply: "设备回复",
     testNoReply: "没有响应",
     testSerialHint: "这个窗口没有 Web Serial，串口测试不可用；请改用 UDP，或用预览/游戏连接。",
-    testNoReplyDetail: "端口打开了，但设备没有回包（波特率或接线可能不对）。",
+    testNoReplyDetail: "端口已打开，但固件没有返回身份信息。试动指令仍已发送，请观察动作并确认波特率。",
     notTested: "未测试",
     portLabel: "串口",
     portRefresh: "刷新",
     portGrant: "添加串口…",
     portEmpty: "还没有已授权的串口；点「添加串口…」在系统对话框里选一个。",
     portNoApi: "这个窗口没有 Web Serial，串口不可用。",
-    portInactive: "当前是 UDP 模式；把上面的连接方式切到「USB 串口」才能选串口。",
+    portInactive: "当前是 UDP 模式；切到「USB / 蓝牙串口」后选择设备。",
     grantFailed: "添加串口失败",
+    serialType: "串口类型",
+    serialAuto: "自动识别",
+    serialBluetooth: "传统蓝牙 SPP",
+    bluetoothHint: "蓝牙请先在系统中配对；仅 BLE 的设备暂不支持。授权只对当前窗口有效，玩家仍需自行授权。",
+    serialOk: "串口已打开并完成身份查询",
+    serialBackend: "串口访问方式",
+    browserBackend: "浏览器授权",
+    nativeBackend: "桌面原生串口",
+    nativeHint: "选择系统串口后可测试。测试会让 L0 轴缓慢回到中位、小幅移动，再回到中位并停止，完成后释放端口。",
+    choosePort: "请选择串口…",
+    loadingPorts: "正在读取串口…",
+    refreshSystemPorts: "刷新系统串口",
+    nativePortsEmpty: "未找到匹配的系统串口，请检查接线、驱动及筛选条件后刷新。",
+    serialMotionTest: "测试设备（小幅试动）",
+    serialMotionDone: "小幅试动与回中指令已发送，请观察设备",
+    motionHint: "会驱动 L0 轴：中位 50% → 60% → 50%，最后停止并释放端口。",
+    stopTest: "停止测试",
+    testStopped: "测试已停止",
   },
   "en-US": {
     importTitle: "Import funscript",
@@ -124,10 +167,10 @@ const TEXT: Record<string, Text> = {
     connTitle: "Device",
     mode: "Transport",
     modeUdp: "WiFi / UDP",
-    modeSerial: "USB serial",
+    modeSerial: "USB / Bluetooth serial",
     status: "Status",
     connHint:
-      "These are settings only; nothing is connected here. The preview and the running game open the real connection. The test sends a single D0 identity request and opens no session.",
+      "Testing sends a small motion and recenters. The serial port is released afterward. Disconnect the same device in the preview first.",
     noNode: "The host does not expose a Node module loader, so the test cannot run.",
     testConn: "Test device",
     testing: "Testing…",
@@ -135,7 +178,7 @@ const TEXT: Record<string, Text> = {
     testReply: "Device replied",
     testNoReply: "No response",
     testSerialHint: "This window has no Web Serial, so the serial test is unavailable; use UDP, or connect from the preview.",
-    testNoReplyDetail: "The port opened but the device did not answer (check baud rate and wiring).",
+    testNoReplyDetail: "The port opened without an identity reply. Motion commands were still sent; watch the device and check the baud rate.",
     notTested: "Not tested",
     portLabel: "Serial port",
     portRefresh: "Refresh",
@@ -145,8 +188,26 @@ const TEXT: Record<string, Text> = {
       "Add port…",
     ),
     portNoApi: "This window has no Web Serial, so serial ports are unavailable.",
-    portInactive: "UDP is selected; switch the transport above to USB serial to pick a port.",
+    portInactive: "Select USB / Bluetooth serial above to pick a device.",
     grantFailed: "Could not add the serial port",
+    serialType: "Serial type",
+    serialAuto: "Automatic",
+    serialBluetooth: "Bluetooth SPP",
+    bluetoothHint: "Pair Bluetooth in system settings first. BLE-only devices are not supported yet. Players must authorize their own devices.",
+    serialOk: "Serial port opened; identity query completed",
+    serialBackend: "Serial access",
+    browserBackend: "Browser permission",
+    nativeBackend: "Desktop native serial",
+    nativeHint: "Select a system serial port. Testing slowly centers L0, moves it a little, recenters, then stops and releases the port.",
+    choosePort: "Select a serial port…",
+    loadingPorts: "Loading serial ports…",
+    refreshSystemPorts: "Refresh system serial ports",
+    nativePortsEmpty: "No matching system port. Check wiring, drivers and filters, then refresh.",
+    serialMotionTest: "Test device (small motion)",
+    serialMotionDone: "Small-motion and recenter commands sent; watch the device",
+    motionHint: "Moves L0: center 50% → 60% → 50%, then stops and releases the port.",
+    stopTest: "Stop test",
+    testStopped: "Test stopped",
   },
 };
 
@@ -338,7 +399,7 @@ function ImportSection() {
 
 
 /** 连接方式选择：直接写项目设置，和运行时读的是同一个字段。 */
-function TransportRow() {
+function TransportRow({ disabled = false }: { disabled?: boolean }) {
   const text = useText();
   const [transport, setTransport] = useSetting<string>("osr6.transport");
   return (
@@ -351,6 +412,7 @@ function TransportRow() {
           { value: "serial", label: text.modeSerial },
         ]}
         ariaLabel={text.mode}
+        disabled={disabled}
       />
     </FieldRow>
   );
@@ -359,6 +421,8 @@ function TransportRow() {
 interface ProbeResult {
   ok: boolean;
   detail: string;
+  motion?: boolean;
+  cancelled?: boolean;
 }
 
 /**
@@ -370,285 +434,121 @@ interface ProbeResult {
  *
  * 顺手仍然发一条 `D0`：万一固件会回包，就把身份信息一起显示出来。
  */
-async function probeUdp(host: string, port: number): Promise<ProbeResult> {
+async function probeUdp(host: string, port: number, signal: AbortSignal): Promise<ProbeResult> {
   // 模块名写成字面量、直接调用宿主 require（工坊机械审核不接受别名转发）
   const host_ = globalThis as unknown as { require?: (id: string) => unknown };
   if (typeof host_.require !== "function") {
     return { ok: false, detail: "" };
   }
-  const dgram = host_.require("node:dgram") as {
-    createSocket: (type: string) => {
-      on: (event: string, listener: (...args: unknown[]) => void) => void;
-      send: (msg: string, port: number, host: string, cb?: (err: Error | null) => void) => void;
-      close: () => void;
-    };
-  };
-
-  return await new Promise<ProbeResult>((resolve) => {
-    const socket = dgram.createSocket("udp4");
-    let settled = false;
-    let reply = "";
-    const timers: Array<ReturnType<typeof setTimeout>> = [];
-
-    const finish = (result: ProbeResult) => {
-      if (settled) return;
-      settled = true;
-      timers.forEach((timer) => clearTimeout(timer));
-      try {
-        socket.close();
-      } catch {
-        // 已经关了
-      }
-      resolve(result);
-    };
-
-    socket.on("message", (...args: unknown[]) => {
-      const message = args[0];
-      if (typeof message === "object" && message !== null && "toString" in message) {
-        reply = String(message as { toString: () => string }).trim();
-      }
-    });
-    socket.on("error", (...args: unknown[]) => {
-      const error = args[0];
-      finish({ ok: false, detail: error instanceof Error ? error.message : String(error) });
-    });
-
-    const sendNow = (payload: string): boolean => {
-      try {
-        socket.send(payload, port, host, (error) => {
-          if (error) finish({ ok: false, detail: error.message });
-        });
-        return true;
-      } catch (error) {
-        finish({ ok: false, detail: error instanceof Error ? error.message : String(error) });
-        return false;
-      }
-    };
-
-    if (sendNow("D0\n")) {
-      // 小幅动作：0.5 → 0.65 → 0.5，每段 600ms 爬升
-      timers.push(setTimeout(() => sendNow("L05000I300\n"), 100));
-      timers.push(setTimeout(() => sendNow("L06500I600\n"), 700));
-      timers.push(setTimeout(() => sendNow("L05000I600\n"), 1500));
-    }
-
-    timers.push(
-      setTimeout(() => {
-        finish({ ok: true, detail: reply.length > 0 ? "reply:" + reply : "sent" });
-      }, 2400),
-    );
-  });
+  const dgram = host_.require("node:dgram") as UdpProbeModule;
+  return probeUdpDevice({ host, port, signal, dgram });
 }
 
-interface SerialPortLike {
-  open(options: { baudRate: number }): Promise<void>;
-  close(): Promise<void>;
-  getInfo(): { usbVendorId?: number; usbProductId?: number };
-  writable: WritableStream<Uint8Array> | null;
-  readable: ReadableStream<Uint8Array> | null;
-}
-
-interface SerialApiLike {
-  getPorts(): Promise<SerialPortLike[]>;
-  requestPort(options?: { filters?: Array<{ usbVendorId?: number }> }): Promise<SerialPortLike>;
-}
-
-function serialApi(): SerialApiLike | null {
-  const nav = navigator as unknown as { serial?: SerialApiLike };
-  return nav.serial && typeof nav.serial.getPorts === "function" ? nav.serial : null;
-}
-
-function parseUsbId(raw: string | undefined): number | undefined {
-  const text = (raw ?? "").trim();
-  if (text.length === 0) return undefined;
-  const value = /^0x/i.test(text) ? Number.parseInt(text, 16) : Number.parseInt(text, 10);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-function delay(ms: number): Promise<null> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(null), Math.max(0, ms));
-  });
-}
-
-/**
- * 串口探测：打开端口 → 发一条 `D0` → 读回包 → 立刻关闭。
- *
- * TCode 的串口是双向的：`D0` 返回设备与固件版本，`D1` 返回协议版本，
- * `D2` 返回轴列表。所以这里能真的验证"接线对不对、波特率对不对"，
- * 代价是打开期间会短暂占用端口——测完马上释放。
- */
-async function probeSerial(
-  baudRate: number,
-  vendorIdRaw: string | undefined,
-  productIdRaw: string | undefined,
-  portIndex: number | undefined,
-): Promise<ProbeResult> {
-  const api = serialApi();
-  if (!api) {
-    return { ok: false, detail: "no-serial-api" };
-  }
-
-  const vendorId = parseUsbId(vendorIdRaw);
-  const productId = parseUsbId(productIdRaw);
-
-  let port: SerialPortLike | null = null;
-  try {
-    const granted = await api.getPorts();
-    const filtered = granted.filter((candidate) => {
-      const info = candidate.getInfo();
-      if (vendorId !== undefined && info.usbVendorId !== vendorId) return false;
-      if (productId !== undefined && info.usbProductId !== productId) return false;
-      return true;
-    });
-    const candidates =
-      vendorId === undefined && productId === undefined ? granted : filtered;
-    const index = Math.max(0, Math.round(portIndex ?? 0));
-    port =
-      candidates[index] ??
-      candidates[0] ??
-      (await api.requestPort(
-        vendorId === undefined ? undefined : { filters: [{ usbVendorId: vendorId }] },
-      ));
-
-    await port.open({ baudRate });
-
-    const writer = port.writable?.getWriter();
-    if (!writer) throw new Error("端口没有可写流");
-    await writer.write(new TextEncoder().encode("D0\n"));
-    writer.releaseLock();
-
-    const reader = port.readable?.getReader();
-    if (!reader) throw new Error("端口没有可读流");
-
-    const deadline = Date.now() + 1200;
-    let text = "";
-    while (Date.now() < deadline) {
-      const chunk = await Promise.race([reader.read(), delay(deadline - Date.now())]);
-      if (!chunk || chunk.done) break;
-      if (chunk.value) text += new TextDecoder().decode(chunk.value);
-      if (text.includes("\n")) break;
-    }
-    try {
-      await reader.cancel();
-    } catch {
-      // 已经结束
-    }
-    await port.close();
-    port = null;
-
-    return text.trim().length > 0
-      ? { ok: true, detail: text.trim() }
-      : { ok: false, detail: "connected-no-reply" };
-  } catch (error) {
-    if (port) {
-      try {
-        await port.close();
-      } catch {
-        // ignore
-      }
-    }
-    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-/**
- * 串口选择。
- *
- * Web Serial 没有「枚举所有 COM 口」的接口，只能看到用户授权过的端口，
- * 所以这里列出 `getPorts()` 的结果，序号就是设置里存的 `serialPortIndex`。
- * 「添加串口…」会弹出系统对话框，授权后端口进入列表。
- */
-function SerialPortRow() {
+/** 浏览器和原生串口共用选择控件；设备必须由用户明确选择。 */
+function SerialPortRow({ onSelect, getNativeApi, disabled = false }: {
+  onSelect: (port: SerialPortLike | undefined) => void;
+  getNativeApi: () => SerialApiLike;
+  disabled?: boolean;
+}) {
   const text = useText();
   const [transport] = useSetting<string>("osr6.transport");
+  const [backend] = useSetting<string>("osr6.serialBackend");
+  const native = serialBackend(backend) === "native";
   const active = transport === "serial";
-  const [index, setIndex] = useSetting<number>("osr6.serialPortIndex");
-  const [labels, setLabels] = useState<string[]>([]);
+  const [kind, setKind] = useSetting<string>("osr6.serialKind");
+  const [vendor] = useSetting<string>("osr6.serialVendorId");
+  const [product] = useSetting<string>("osr6.serialProductId");
+  const [devices, setDevices] = useState<Awaited<ReturnType<typeof listSerialDevices>>>([]);
+  const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
-
-  async function refresh() {
-    const api = serialApi();
-    if (!api) {
-      setLabels([]);
-      return;
-    }
-    try {
-      const ports = await api.getPorts();
-      setLabels(
-        ports.map((port, position) => {
-          const info = port.getInfo();
-          const vid =
-            info.usbVendorId !== undefined
-              ? "VID:" + info.usbVendorId.toString(16).padStart(4, "0")
-              : "VID:?";
-          const pid =
-            info.usbProductId !== undefined
-              ? "PID:" + info.usbProductId.toString(16).padStart(4, "0")
-              : "PID:?";
-          return "#" + position + " " + vid + " " + pid;
-        }),
-      );
-    } catch {
-      setLabels([]);
-    }
+  const [error, setError] = useState("");
+  const chosen = useRef<SerialPortLike>();
+  const mounted = useRef(true);
+  const generation = useRef(0);
+  const options = (): SerialOptions => ({
+    api: native ? getNativeApi() : undefined,
+    baudRate: 115200, kind: serialKind(kind),
+    vendorId: kind === "bluetooth" ? undefined : parseUsbId(vendor),
+    productId: kind === "bluetooth" ? undefined : parseUsbId(product),
+  });
+  function select(port: SerialPortLike | undefined, index?: number) {
+    chosen.current = port;
+    setChoice(index === undefined ? "" : String(index));
+    onSelect(port);
+    // Device selection is local to this mounted panel. Persisting the legacy
+    // list index makes Studio reload the page and lose the selected port object.
   }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  async function grant() {
-    const api = serialApi();
-    if (!api) return;
+  async function refresh() {
+    const current = ++generation.current;
     setBusy(true);
     try {
-      await api.requestPort();
-      await refresh();
-    } catch (error) {
-      toast({
-        title: text.grantFailed,
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
+      const result = await listSerialDevices(options());
+      if (mounted.current && current === generation.current) {
+        setDevices(result); setError("");
+        const selected = result.find((item) => item.port === chosen.current);
+        if (!selected) select(undefined);
+        else setChoice(String(selected.index));
+      }
+    } catch (cause) {
+      if (mounted.current && current === generation.current) {
+        setDevices([]); setError(errorMessage(cause)); select(undefined);
+      }
     } finally {
-      setBusy(false);
+      if (mounted.current && current === generation.current) setBusy(false);
     }
   }
-
-  const supported = serialApi() !== null;
-
-  return (
-    <FieldRow
-      label={text.portLabel}
-      description={!active ? text.portInactive : supported ? undefined : text.portNoApi}
-    >
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; ++generation.current; };
+  }, []);
+  useEffect(() => {
+    select(undefined);
+    if (active) void refresh();
+    else { setDevices([]); ++generation.current; setBusy(false); }
+  }, [kind, vendor, product, backend, active]);
+  async function grant() {
+    setBusy(true);
+    try {
+      const port = await requestSerialDevice(options());
+      if (!mounted.current) return;
+      const result = await listSerialDevices(options());
+      if (!mounted.current) return;
+      const selected = result.find((item) => item.port === port);
+      setDevices(result);
+      if (selected) select(port, selected.index);
+      setError("");
+    } catch (cause) {
+      if (mounted.current) setError(serialRequestErrorMessage(cause));
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  const reason = native ? null : serialUnavailableReason();
+  return <>
+    <FieldRow label={text.serialType} description={native ? text.nativeHint : text.bluetoothHint}>
+      <Segmented value={serialKind(kind)} onChange={setKind} options={[
+        { value: "auto", label: text.serialAuto }, { value: "usb", label: "USB" },
+        { value: "bluetooth", label: text.serialBluetooth },
+      ]} ariaLabel={text.serialType} disabled={!active || busy || disabled} />
+    </FieldRow>
+    <FieldRow label={text.portLabel} description={!active ? text.portInactive : reason ?? undefined}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {labels.length > 0 ? (
-          <Segmented
-            value={String(Math.min(index ?? 0, labels.length - 1))}
-            onChange={(value) => setIndex(Number(value))}
-            options={labels.map((label, position) => ({
-              value: String(position),
-              label,
-            }))}
-            ariaLabel={text.portLabel}
-            disabled={!active}
-          />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>
-            {supported ? text.portEmpty : text.portNoApi}
-          </span>
-        )}
-        <Button onClick={() => void refresh()} disabled={!active || !supported || busy}>
-          {text.portRefresh}
+        <Select value={choice} placeholder={busy ? text.loadingPorts : text.choosePort}
+          onChange={(value) => {
+            const selected = devices.find((item) => item.index === Number(value));
+            if (selected) select(selected.port, selected.index);
+          }}
+          options={devices.map((item) => ({ value: String(item.index), label: item.label }))}
+          ariaLabel={text.portLabel} disabled={!active || busy || disabled || !!reason || devices.length === 0} />
+        <Button onClick={() => void refresh()} disabled={!active || !!reason || busy || disabled}>
+          {native ? text.refreshSystemPorts : text.portRefresh}
         </Button>
-        <Button onClick={() => void grant()} disabled={!active || !supported || busy}>
-          {text.portGrant}
-        </Button>
+        {!native ? <Button onClick={() => void grant()} disabled={!active || !!reason || busy || disabled}>{text.portGrant}</Button> : null}
+        {!busy && !devices.length && !error ? <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>
+          {reason ?? (native ? text.nativePortsEmpty : text.portEmpty)}
+        </span> : null}
+        {error ? <span role="alert" style={{ fontSize: 12, color: "var(--warn)" }}>{error}</span> : null}
       </div>
     </FieldRow>
-  );
+  </>;
 }
 
 function DeviceSection() {
@@ -660,24 +560,75 @@ function DeviceSection() {
   const [vendorId] = useSetting<string>("osr6.serialVendorId");
   const [productId] = useSetting<string>("osr6.serialProductId");
   const [portIndex] = useSetting<number>("osr6.serialPortIndex");
+  const [kind] = useSetting<string>("osr6.serialKind");
+  const [backend, setBackend] = useSetting<string>("osr6.serialBackend");
+  const [selectedPort, setSelectedPort] = useState<SerialPortLike>();
+  const nativeApi = useRef<NativeSerialApi>();
+  function getNativeApi(): NativeSerialApi {
+    if (!nativeApi.current) nativeApi.current = createStudioSerialApi();
+    return nativeApi.current;
+  }
+  const testAbort = useRef<AbortController | null>(null);
+  const testTask = useRef<Promise<ProbeResult> | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => () => {
+    testAbort.current?.abort();
+    const api = nativeApi.current;
+    nativeApi.current = undefined;
+    // 让试动的取消清理先发送停止并释放端口，再销毁串口会话。
+    if (testTask.current) void testTask.current.catch(() => undefined).finally(() => api?.dispose());
+    else api?.dispose();
+  }, [backend, transport]);
 
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ProbeResult | null>(null);
+  const configuration = JSON.stringify([transport, backend, host, port, baudRate, kind, vendorId, productId]);
+  const currentSelection = useRef({ configuration, selectedPort });
+  currentSelection.current = { configuration, selectedPort };
+  const [outcome, setOutcome] = useState<{
+    configuration: string; selectedPort?: SerialPortLike; result: ProbeResult;
+  } | null>(null);
+  const result = outcome?.configuration === configuration && outcome.selectedPort === selectedPort ? outcome.result : null;
+  useEffect(() => {
+    setOutcome(null);
+    return () => { testAbort.current?.abort(); };
+  }, [configuration, selectedPort]);
 
   const endpoint =
     transport === "serial"
-      ? "serial @ " + (baudRate ?? 115200)
+      ? (selectedPort ? describeSerialPort(selectedPort) : "serial #" + (portIndex ?? 0)) + " @ " + (baudRate ?? 115200)
       : (host ?? "192.168.1.1") + ":" + (port ?? 8000);
 
   async function test() {
+    if (testAbort.current) return;
+    if (transport === "serial" && !selectedPort) return;
     setBusy(true);
-    setResult(null);
+    setOutcome(null);
+    const controller = new AbortController();
+    testAbort.current = controller;
+    const publish = (result: ProbeResult) => {
+      if (!mounted.current || testAbort.current !== controller ||
+          currentSelection.current.configuration !== configuration || currentSelection.current.selectedPort !== selectedPort) return false;
+      setOutcome({ configuration, selectedPort, result });
+      return true;
+    };
+    let task: Promise<ProbeResult> | undefined;
     try {
-      const probe =
+      task =
         transport === "serial"
-          ? await probeSerial(Math.round(baudRate ?? 115200), vendorId, productId, portIndex)
-          : await probeUdp((host ?? "").trim() || "192.168.1.1", Math.round(port ?? 8000));
-      setResult(probe);
+          ? testSerialDevice({
+            api: serialBackend(backend) === "native" ? getNativeApi() : undefined,
+            baudRate: Math.round(baudRate ?? 115200), kind: serialKind(kind), selectedPort,
+            vendorId: kind === "bluetooth" ? undefined : parseUsbId(vendorId),
+            productId: kind === "bluetooth" ? undefined : parseUsbId(productId),
+          }, controller.signal)
+          : probeUdp((host ?? "").trim() || "192.168.1.1", Math.round(port ?? 8000), controller.signal);
+      testTask.current = task;
+      const probe = await task;
+      if (!publish(probe) || probe.cancelled) return;
 
       // 把这几种"不是设备的问题"的情况翻成人话
       let detail = probe.detail;
@@ -692,12 +643,18 @@ function DeviceSection() {
       }
 
       toast({
-        title: probe.ok ? text.testOk : text.testNoReply,
+        title: probe.ok ? (probe.motion ? text.serialMotionDone : transport === "serial" ? text.serialOk : text.testOk) : text.testNoReply,
         description: detail || undefined,
         type: probe.ok ? "success" : "warning",
       });
+    } catch (error) {
+      publish({ ok: false, detail: errorMessage(error), cancelled: controller.signal.aborted });
     } finally {
-      setBusy(false);
+      if (testAbort.current === controller) {
+        testAbort.current = null;
+        if (mounted.current) setBusy(false);
+      }
+      if (testTask.current === task) testTask.current = null;
     }
   }
 
@@ -717,22 +674,34 @@ function DeviceSection() {
     ? text.testing
     : result === null
       ? text.notTested
-      : (result.ok ? text.testOk : text.testNoReply) +
+      : (result.cancelled ? text.testStopped : result.ok ? (result.motion ? text.serialMotionDone : transport === "serial" ? text.serialOk : text.testOk) : text.testNoReply) +
         (shownDetail ? "：" + shownDetail : "");
 
   return (
     <Section title={text.connTitle}>
-      <TransportRow />
-      <SerialPortRow />
+      <TransportRow disabled={busy} />
+      <FieldRow label={text.serialBackend} disabled={transport !== "serial" || busy}>
+        <Segmented value={serialBackend(backend) === "native" ? "native" : "web"} onChange={setBackend} options={[
+          { value: "web", label: text.browserBackend }, { value: "native", label: text.nativeBackend },
+        ]} ariaLabel={text.serialBackend} />
+      </FieldRow>
+      <SerialPortRow onSelect={setSelectedPort} getNativeApi={getNativeApi} disabled={busy} />
       <FieldRow label={text.status} description={text.connHint}>
         <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>
           {endpoint} · {statusText}
         </span>
       </FieldRow>
-      <FieldRow label="">
-        <Button onClick={test} disabled={busy}>
-          {text.testConn}
+      <FieldRow label="" description={transport === "serial" ? text.motionHint : undefined}>
+        <Button onClick={test} disabled={busy || (transport === "serial" && !selectedPort)}>
+          {busy ? text.testing : transport === "serial" ? text.serialMotionTest : text.testConn}
         </Button>
+        {busy ? <Button variant="danger" disabled={testAbort.current?.signal.aborted === true}
+          onClick={() => {
+            testAbort.current?.abort();
+            setOutcome({ configuration, selectedPort, result: { ok: false, cancelled: true, detail: text.stopTest } });
+          }}>
+          {text.stopTest}
+        </Button> : null}
       </FieldRow>
     </Section>
   );
@@ -753,6 +722,8 @@ function SettingsPage() {
           "osr6.scriptImportFolder",
           "osr6.scriptImportOverwrite",
           "osr6.transport",
+          "osr6.serialKind",
+          "osr6.serialBackend",
         ]}
       />
     </Panel>

@@ -145,6 +145,14 @@ export class FunscriptPlayer {
     return next;
   }
 
+  /** Reapply a changed output mapping without changing the playback clock.
+   * Paused players defer the new output until resume. */
+  refreshOutput(): void {
+    if (!this.active) return;
+    this.lastEmitted = -1;
+    if (!this.paused) this.tick();
+  }
+
   stop(): void {
     this.stopTimer();
     this.active = false;

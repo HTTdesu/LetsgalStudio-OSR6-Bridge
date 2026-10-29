@@ -1,7 +1,9 @@
 node_modules
+.npm-cache/
 dist
 sdk
 studio-ui
 .DS_Store
 *.log
 tools/carrier.mjs
+.idea
